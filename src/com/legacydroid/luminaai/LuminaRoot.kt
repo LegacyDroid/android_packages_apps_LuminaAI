@@ -16,8 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.darkColors
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -30,11 +29,7 @@ import com.legacydroid.luminaai.model.LuminaState
 import com.legacydroid.luminaai.ui.components.AmbientParticles
 import com.legacydroid.luminaai.ui.components.LuminaChatOverlay
 import com.legacydroid.luminaai.ui.components.LuminaPowerRippleEffect
-import com.legacydroid.luminaai.ui.theme.LuminaAmber
-import com.legacydroid.luminaai.ui.theme.LuminaBgCard
-import com.legacydroid.luminaai.ui.theme.LuminaCoral
-import com.legacydroid.luminaai.ui.theme.LuminaMint
-import com.legacydroid.luminaai.ui.theme.LuminaTextPrimary
+import com.legacydroid.luminaai.ui.theme.LuminaTheme
 
 /**
  * Fullscreen overlay root. Transparent so the app behind stays visible; the
@@ -42,17 +37,7 @@ import com.legacydroid.luminaai.ui.theme.LuminaTextPrimary
  */
 @Composable
 fun LuminaRoot() {
-    MaterialTheme(
-        colors = darkColors(
-            primary = LuminaCoral,
-            secondary = LuminaAmber,
-            background = Color.Transparent,
-            surface = LuminaBgCard,
-            onPrimary = Color.White,
-            onBackground = LuminaTextPrimary,
-            onSurface = LuminaTextPrimary
-        )
-    ) {
+    LuminaTheme {
         LuminaRootContent()
     }
 }
@@ -63,6 +48,8 @@ private fun LuminaRootContent() {
     val shockwaveToken = LuminaSession.shockwaveToken
     val messages = LuminaSession.messages
     val isThinking = LuminaSession.isThinking
+
+    val scheme = MaterialTheme.colorScheme
 
     val ambientGlowIntensity by animateFloatAsState(
         targetValue = if (state == LuminaState.AWAKENED) 0.65f else 0.15f,
@@ -81,11 +68,11 @@ private fun LuminaRootContent() {
         Canvas(modifier = Modifier.fillMaxSize().blur(glowBlur)) {
             val maxDimension = kotlin.math.max(size.width, size.height)
 
-            // Top-left coral glow
+            // Top-left primary glow
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        LuminaCoral.copy(alpha = 0.35f * ambientGlowIntensity),
+                        scheme.primary.copy(alpha = 0.35f * ambientGlowIntensity),
                         Color.Transparent
                     ),
                     center = Offset(size.width * 0.30f, size.height * 0.20f),
@@ -95,11 +82,11 @@ private fun LuminaRootContent() {
                 center = Offset(size.width * 0.30f, size.height * 0.20f)
             )
 
-            // Right-center amber glow
+            // Right-center secondary glow
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        LuminaAmber.copy(alpha = 0.28f * ambientGlowIntensity),
+                        scheme.secondary.copy(alpha = 0.28f * ambientGlowIntensity),
                         Color.Transparent
                     ),
                     center = Offset(size.width * 0.70f, size.height * 0.60f),
@@ -109,11 +96,11 @@ private fun LuminaRootContent() {
                 center = Offset(size.width * 0.70f, size.height * 0.60f)
             )
 
-            // Bottom-center mint glow
+            // Bottom-center tertiary glow
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        LuminaMint.copy(alpha = 0.15f * ambientGlowIntensity),
+                        scheme.tertiary.copy(alpha = 0.15f * ambientGlowIntensity),
                         Color.Transparent
                     ),
                     center = Offset(size.width * 0.50f, size.height * 0.90f),

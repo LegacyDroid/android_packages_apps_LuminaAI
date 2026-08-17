@@ -14,6 +14,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,10 +25,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import com.legacydroid.luminaai.ui.theme.LuminaAmber
-import com.legacydroid.luminaai.ui.theme.LuminaCoral
-import com.legacydroid.luminaai.ui.theme.LuminaGold
-import com.legacydroid.luminaai.ui.theme.LuminaPink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -45,6 +42,8 @@ fun LuminaPowerRippleEffect(
     val ripple1Progress = remember(triggerToken) { Animatable(0f) }
     val ripple2Progress = remember(triggerToken) { Animatable(0f) }
     val glowBloomProgress = remember(triggerToken) { Animatable(0f) }
+
+    val scheme = MaterialTheme.colorScheme
 
     val infiniteTransition = rememberInfiniteTransition(label = "glowDrift")
     val glowDrift by infiniteTransition.animateFloat(
@@ -106,9 +105,9 @@ fun LuminaPowerRippleEffect(
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFFFB37A).copy(alpha = 0.60f * bloomAlpha),
-                            Color(0xFFFF6B5E).copy(alpha = 0.35f * bloomAlpha),
-                            Color(0xFFFF7EB3).copy(alpha = 0.15f * bloomAlpha),
+                            scheme.secondary.copy(alpha = 0.60f * bloomAlpha),
+                            scheme.primary.copy(alpha = 0.35f * bloomAlpha),
+                            scheme.tertiary.copy(alpha = 0.15f * bloomAlpha),
                             Color.Transparent
                         ),
                         center = origin,
@@ -137,7 +136,7 @@ fun LuminaPowerRippleEffect(
 
                 // Glow ring around the ripple wave
                 drawCircle(
-                    color = LuminaCoral.copy(alpha = alpha * 0.45f),
+                    color = scheme.primary.copy(alpha = alpha * 0.45f),
                     radius = radius,
                     center = origin,
                     style = Stroke(width = strokeWidth * 4f)
@@ -145,7 +144,7 @@ fun LuminaPowerRippleEffect(
 
                 // Main crisp ripple line
                 drawCircle(
-                    color = LuminaGold.copy(alpha = alpha * 0.95f),
+                    color = scheme.primary.copy(alpha = alpha * 0.95f),
                     radius = radius,
                     center = origin,
                     style = Stroke(width = strokeWidth)
@@ -154,7 +153,7 @@ fun LuminaPowerRippleEffect(
                 // Inner glow
                 if (radius > 10f) {
                     drawCircle(
-                        color = LuminaAmber.copy(alpha = alpha * 0.25f),
+                        color = scheme.secondary.copy(alpha = alpha * 0.25f),
                         radius = radius - strokeWidth * 2f,
                         center = origin,
                         style = Stroke(width = strokeWidth * 2.5f)

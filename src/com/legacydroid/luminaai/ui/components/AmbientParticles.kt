@@ -13,15 +13,12 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import com.legacydroid.luminaai.ui.theme.LuminaCoral
-import com.legacydroid.luminaai.ui.theme.LuminaGold
-import com.legacydroid.luminaai.ui.theme.LuminaMint
-import com.legacydroid.luminaai.ui.theme.LuminaPink
 import kotlin.random.Random
 
 private data class ParticleData(
@@ -41,7 +38,8 @@ fun AmbientParticles(
     intensityMultiplier: Float = 1f
 ) {
     val particles = remember(particleCount) {
-        val colors = listOf(LuminaGold, LuminaCoral, LuminaMint, LuminaPink)
+        val scheme = MaterialTheme.colorScheme
+        val colors = listOf(scheme.primary, scheme.secondary, scheme.tertiary)
         List(particleCount) {
             ParticleData(
                 initialX = Random.nextFloat(),

@@ -22,10 +22,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -41,15 +39,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.Text
-import androidx.compose.material.TextField
-import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -70,11 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.legacydroid.luminaai.model.ChatMessage
 import com.legacydroid.luminaai.model.SuggestionItem
-import com.legacydroid.luminaai.ui.theme.LuminaAmber
-import com.legacydroid.luminaai.ui.theme.LuminaCoral
-import com.legacydroid.luminaai.ui.theme.LuminaGold
-import com.legacydroid.luminaai.ui.theme.LuminaTextPrimary
-import com.legacydroid.luminaai.ui.theme.LuminaTextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -83,7 +77,8 @@ import kotlin.random.Random
  * The awakened Lumina overlay: close/clear buttons, the orb at 32% height,
  * the LUMINA label, and the bottom chat stack (messages, suggestion chips,
  * pill input). Entry timings mirror the prototype: orb +500ms/1.1s, label
- * +1100ms, chat +900ms, buttons +1300ms.
+ * +1100ms, chat +900ms, buttons +1300ms. Colors come from the Android
+ * Material dynamic scheme.
  */
 @Composable
 fun LuminaChatOverlay(
@@ -96,6 +91,7 @@ fun LuminaChatOverlay(
 ) {
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val scheme = MaterialTheme.colorScheme
 
     val orbMaterialize = remember { Animatable(0f) }
     val labelAlpha = remember { Animatable(0f) }
@@ -161,6 +157,9 @@ fun LuminaChatOverlay(
         val totalHeight = maxHeight
         val orbTopOffset = totalHeight * 0.32f
 
+        val controlBg = scheme.surfaceVariant.copy(alpha = 0.45f)
+        val controlBorder = scheme.outlineVariant.copy(alpha = 0.40f)
+
         // Close / clear chat buttons, top right
         Row(
             modifier = Modifier
@@ -176,13 +175,13 @@ fun LuminaChatOverlay(
                     modifier = Modifier
                         .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color(0x1AFFFFFF))
-                        .border(0.5.dp, Color(0x26FFFFFF), CircleShape)
+                        .background(controlBg)
+                        .border(0.5.dp, controlBorder, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Clear Chat",
-                        tint = LuminaTextSecondary,
+                        tint = scheme.onSurfaceVariant,
                         modifier = Modifier.size(15.dp)
                     )
                 }
@@ -192,13 +191,13 @@ fun LuminaChatOverlay(
                 modifier = Modifier
                     .size(30.dp)
                     .clip(CircleShape)
-                    .background(Color(0x1AFFFFFF))
-                    .border(0.5.dp, Color(0x26FFFFFF), CircleShape)
+                    .background(controlBg)
+                    .border(0.5.dp, controlBorder, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close Lumina AI",
-                    tint = Color.White,
+                    tint = scheme.onSurface,
                     modifier = Modifier.size(15.dp)
                 )
             }
@@ -232,7 +231,7 @@ fun LuminaChatOverlay(
         ) {
             Text(
                 text = "LUMINA",
-                color = Color(0xFFFFF5E8).copy(alpha = 0.75f),
+                color = scheme.onSurface.copy(alpha = 0.75f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 3.5.sp
@@ -295,8 +294,8 @@ fun LuminaChatOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
-                    .background(Color(0xCC140E12))
-                    .border(0.5.dp, Color(0x26FFFFFF), RoundedCornerShape(24.dp))
+                    .background(scheme.surfaceVariant.copy(alpha = 0.60f))
+                    .border(0.5.dp, controlBorder, RoundedCornerShape(24.dp))
                     .padding(start = 16.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -306,16 +305,22 @@ fun LuminaChatOverlay(
                     placeholder = {
                         Text(
                             text = "Ask Lumina anything...",
-                            color = Color(0x66FFF5E8),
+                            color = scheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     },
-                    colors = TextFieldDefaults.textFieldColors(
-                        backgroundColor = Color.Transparent,
-                        textColor = Color.White,
-                        cursorColor = LuminaGold,
+                    colors = TextFieldDefaults.colors(
+                        containerColor = Color.Transparent,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        cursorColor = scheme.primary,
                         focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                        focusedPlaceholderColor = scheme.onSurfaceVariant,
+                        unfocusedPlaceholderColor = scheme.onSurfaceVariant,
+                        disabledPlaceholderColor = scheme.onSurfaceVariant
                     ),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -339,9 +344,10 @@ fun LuminaChatOverlay(
                         .clip(CircleShape)
                         .background(
                             if (canSend) Brush.linearGradient(
-                                listOf(LuminaCoral, LuminaAmber)
+                                listOf(scheme.primary, scheme.secondary)
                             ) else Brush.linearGradient(
-                                listOf(Color(0x33FFFFFF), Color(0x22FFFFFF))
+                                listOf(scheme.onSurface.copy(alpha = 0.15f),
+                                    scheme.onSurface.copy(alpha = 0.10f))
                             )
                         )
                         .clickable(enabled = canSend) {
@@ -355,7 +361,7 @@ fun LuminaChatOverlay(
                     Icon(
                         imageVector = Icons.Default.ArrowUpward,
                         contentDescription = "Send",
-                        tint = Color.White,
+                        tint = scheme.onPrimary,
                         modifier = Modifier.size(15.dp)
                     )
                 }
@@ -366,6 +372,7 @@ fun LuminaChatOverlay(
 
 @Composable
 private fun MessageBubble(message: ChatMessage) {
+    val scheme = MaterialTheme.colorScheme
     var displayedText by remember(message.id) {
         mutableStateOf(if (message.isUser) message.text else "")
     }
@@ -397,7 +404,7 @@ private fun MessageBubble(message: ChatMessage) {
         contentAlignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         if (message.isUser) {
-            // User bubble: coral→amber gradient, sharp bottom-right corner
+            // User bubble: primary→secondary gradient, sharp bottom-right corner
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.82f)
@@ -412,8 +419,8 @@ private fun MessageBubble(message: ChatMessage) {
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                Color(0xD9FF6B5E),
-                                Color(0xD9FFA552)
+                                scheme.primary.copy(alpha = 0.85f),
+                                scheme.secondary.copy(alpha = 0.85f)
                             )
                         )
                     )
@@ -421,14 +428,14 @@ private fun MessageBubble(message: ChatMessage) {
             ) {
                 Text(
                     text = displayedText,
-                    color = Color.White,
+                    color = scheme.onPrimary,
                     fontSize = 13.5.sp,
                     lineHeight = 19.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
         } else {
-            // AI bubble: frosted white, sharp bottom-left corner
+            // AI bubble: frosted surface variant, sharp bottom-left corner
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.82f)
@@ -440,10 +447,10 @@ private fun MessageBubble(message: ChatMessage) {
                             bottomEnd = 18.dp
                         )
                     )
-                    .background(Color(0x1AFFFFFF))
+                    .background(scheme.surfaceVariant.copy(alpha = 0.55f))
                     .border(
                         0.5.dp,
-                        Color(0x26FFFFFF),
+                        scheme.outlineVariant.copy(alpha = 0.40f),
                         RoundedCornerShape(
                             topStart = 18.dp,
                             topEnd = 18.dp,
@@ -455,7 +462,7 @@ private fun MessageBubble(message: ChatMessage) {
             ) {
                 Text(
                     text = displayedText,
-                    color = LuminaTextPrimary,
+                    color = scheme.onSurface,
                     fontSize = 13.5.sp,
                     lineHeight = 20.sp,
                     fontWeight = FontWeight.Normal
@@ -467,6 +474,7 @@ private fun MessageBubble(message: ChatMessage) {
 
 @Composable
 private fun TypingIndicatorBubble() {
+    val scheme = MaterialTheme.colorScheme
     val transition = rememberInfiniteTransition(label = "typing")
     val dot1 by transition.animateFloat(
         initialValue = 0f,
@@ -530,8 +538,9 @@ private fun TypingIndicatorBubble() {
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0x1AFFFFFF))
-                .border(0.5.dp, Color(0x26FFFFFF), RoundedCornerShape(16.dp))
+                .background(scheme.surfaceVariant.copy(alpha = 0.55f))
+                .border(0.5.dp, scheme.outlineVariant.copy(alpha = 0.40f),
+                    RoundedCornerShape(16.dp))
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -544,7 +553,7 @@ private fun TypingIndicatorBubble() {
                         .offset(y = offset.dp)
                         .alpha(alpha)
                         .clip(CircleShape)
-                        .background(LuminaTextSecondary)
+                        .background(scheme.onSurfaceVariant)
                 )
             }
         }
@@ -556,17 +565,19 @@ private fun SuggestionChip(
     title: String,
     onClick: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x10FFFFFF))
-            .border(0.5.dp, Color(0x26FFFFFF), RoundedCornerShape(16.dp))
+            .background(scheme.surfaceVariant.copy(alpha = 0.45f))
+            .border(0.5.dp, scheme.outlineVariant.copy(alpha = 0.40f),
+                RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 7.dp)
     ) {
         Text(
             text = title,
-            color = LuminaTextPrimary,
+            color = scheme.onSurface,
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Medium
         )

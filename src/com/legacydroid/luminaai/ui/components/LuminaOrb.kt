@@ -16,6 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,15 +28,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.legacydroid.luminaai.ui.theme.LuminaAmber
-import com.legacydroid.luminaai.ui.theme.LuminaCoral
-import com.legacydroid.luminaai.ui.theme.LuminaMint
-import com.legacydroid.luminaai.ui.theme.LuminaPink
-import com.legacydroid.luminaai.ui.theme.LuminaViolet
 
 /**
- * Conic multi-color gradient orb with specular highlight, mint fill layer,
- * inset 3D rim, pulsing white core, slow rotation and vertical float.
+ * Material-colored orb: rotating primary/secondary/tertiary conic gradient,
+ * specular highlight, tertiary fill layer, inset 3D rim, pulsing white core,
+ * slow rotation and vertical float.
  */
 @Composable
 fun LuminaOrb(
@@ -44,6 +41,8 @@ fun LuminaOrb(
     isThinking: Boolean = false,
     scale: Float = 1f
 ) {
+    val scheme = MaterialTheme.colorScheme
+
     val infiniteTransition = rememberInfiniteTransition(label = "orbAnimations")
 
     val rotationAngle by infiniteTransition.animateFloat(
@@ -101,8 +100,8 @@ fun LuminaOrb(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        LuminaCoral.copy(alpha = 0.40f * corePulse),
-                        LuminaAmber.copy(alpha = 0.22f * corePulse),
+                        scheme.primary.copy(alpha = 0.40f * corePulse),
+                        scheme.secondary.copy(alpha = 0.22f * corePulse),
                         Color.Transparent
                     ),
                     center = center,
@@ -117,12 +116,10 @@ fun LuminaOrb(
                 drawCircle(
                     brush = Brush.sweepGradient(
                         colors = listOf(
-                            LuminaCoral,
-                            LuminaAmber,
-                            LuminaPink,
-                            LuminaViolet,
-                            LuminaMint,
-                            LuminaCoral
+                            scheme.primary,
+                            scheme.secondary,
+                            scheme.tertiary,
+                            scheme.primary
                         ),
                         center = center
                     ),
@@ -145,11 +142,11 @@ fun LuminaOrb(
                 center = center
             )
 
-            // Mint fill layer (bottom-right)
+            // Tertiary fill layer (bottom-right)
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        LuminaMint.copy(alpha = 0.30f),
+                        scheme.tertiary.copy(alpha = 0.30f),
                         Color.Transparent
                     ),
                     center = Offset(center.x + orbRadius * 0.30f, center.y + orbRadius * 0.40f),
