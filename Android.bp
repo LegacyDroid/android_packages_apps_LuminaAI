@@ -1,0 +1,58 @@
+//
+// SPDX-FileCopyrightText: 2026 The LegacyDroid Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+android_app {
+    name: "LuminaAI",
+
+    srcs: ["src/**/*.kt"],
+    resource_dirs: ["res"],
+
+    manifest: "AndroidManifest.xml",
+
+    platform_apis: true,
+    certificate: "platform",
+
+    privileged: true,
+    system_ext_specific: true,
+
+    optimize: {
+        enabled: true,
+        optimize: true,
+        shrink: true,
+        shrink_resources: true,
+        proguard_compatibility: false,
+    },
+
+    static_libs: [
+        "androidx.core_core-ktx",
+        "androidx.activity_activity-compose",
+        "androidx.compose.foundation_foundation",
+        "androidx.compose.foundation_foundation-layout",
+        "androidx.compose.material_material",
+        "androidx.compose.material_material-icons-extended",
+        "androidx.compose.runtime_runtime",
+        "androidx.compose.ui_ui",
+        "androidx.compose.ui_ui-graphics",
+        "androidx.compose.ui_ui-tooling-preview",
+        "androidx.compose.ui_ui-util",
+        "kotlinx-coroutines-android",
+    ],
+
+    kotlincflags: ["-Xjvm-default=all"],
+
+    required: ["privapp_whitelist_com.legacydroid.luminaai"],
+}
+
+prebuilt_etc {
+    name: "privapp_whitelist_com.legacydroid.luminaai",
+    src: "privapp_whitelist_com.legacydroid.luminaai.xml",
+    filename: "privapp_whitelist_com.legacydroid.luminaai.xml",
+    sub_dir: "permissions",
+    system_ext_specific: true,
+}
