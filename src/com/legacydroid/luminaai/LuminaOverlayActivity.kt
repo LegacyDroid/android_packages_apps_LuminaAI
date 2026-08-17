@@ -5,10 +5,10 @@
 
 package com.legacydroid.luminaai
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 
@@ -18,7 +18,7 @@ import androidx.core.view.WindowCompat
  * queue refuses to cold-start targetSdk-O+ manifest receivers in the
  * background, so a receiver-driven service can never appear from a cold app.
  */
-class LuminaOverlayActivity : Activity() {
+class LuminaOverlayActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
