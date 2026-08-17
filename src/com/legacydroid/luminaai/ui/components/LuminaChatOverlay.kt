@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +81,7 @@ import kotlin.random.Random
  * +1100ms, chat +900ms, buttons +1300ms. Colors come from the Android
  * Material dynamic scheme.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LuminaChatOverlay(
     modifier: Modifier = Modifier,
@@ -310,7 +312,6 @@ fun LuminaChatOverlay(
                         )
                     },
                     colors = TextFieldDefaults.colors(
-                        containerColor = Color.Transparent,
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
                         disabledContainerColor = Color.Transparent,

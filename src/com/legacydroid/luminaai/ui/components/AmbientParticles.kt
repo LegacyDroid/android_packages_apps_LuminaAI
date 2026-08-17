@@ -37,8 +37,8 @@ fun AmbientParticles(
     particleCount: Int = 22,
     intensityMultiplier: Float = 1f
 ) {
+    val scheme = MaterialTheme.colorScheme
     val particles = remember(particleCount) {
-        val scheme = MaterialTheme.colorScheme
         val colors = listOf(scheme.primary, scheme.secondary, scheme.tertiary)
         List(particleCount) {
             ParticleData(
