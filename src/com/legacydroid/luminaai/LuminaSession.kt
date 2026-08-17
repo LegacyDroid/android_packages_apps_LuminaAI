@@ -20,7 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Singleton Compose state holder shared by the overlay window and the service.
+ * Singleton Compose state holder shared with the overlay activity.
  * The orchestration timings mirror the HTML/CSS prototype: overlay 120ms after
  * the ripple begins, greeting 2400ms after awakening, 700ms close fade.
  */
@@ -36,11 +36,15 @@ object LuminaSession {
     var isThinking by mutableStateOf(false)
         private set
 
-    /** Called by the service once the overlay window is torn down (state idle). */
+    /** Called by the overlay activity once the session goes idle (overlay closed). */
     var onIdle: (() -> Unit)? = null
 
     fun awaken() {
-        if (state == LuminaState.AWAKENED) return
+        if (state == LuminaState.AWAKENED) {
+            // Already awake: replay the shockwave so a re-trigger stays visible.
+            shockwaveToken = System.currentTimeMillis()
+            return
+        }
         shockwaveToken = System.currentTimeMillis()
         scope.launch {
             delay(120)

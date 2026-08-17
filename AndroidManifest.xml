@@ -6,24 +6,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.legacydroid.luminaai">
 
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
     <application
         android:label="@string/app_name"
         android:allowBackup="false">
 
-        <receiver
-            android:name=".LuminaTriggerReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.legacydroid.luminaai.TRIGGER" />
-                <action android:name="com.legacydroid.luminaai.DISMISS" />
-            </intent-filter>
-        </receiver>
-
-        <service
-            android:name=".LuminaOverlayService"
-            android:exported="false" />
+        <activity
+            android:name=".LuminaOverlayActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.LuminaOverlay"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode|screenLayout|smallestScreenSize" />
     </application>
 
 </manifest>
