@@ -7,6 +7,7 @@ package com.legacydroid.luminaai
 
 import android.app.Application
 import android.app.AppOpsManager
+import android.content.pm.PackageManager
 import android.os.Process
 import com.legacydroid.luminaai.data.LocalSearchIndex
 import com.legacydroid.luminaai.data.NotificationHub
@@ -14,13 +15,35 @@ import com.legacydroid.luminaai.data.ToolRegistry
 
 class LuminaApp : Application() {
 
+    private val grantedRuntimePermissions = listOf(
+        android.Manifest.permission.READ_SMS,
+        android.Manifest.permission.READ_CALL_LOG,
+        android.Manifest.permission.READ_CONTACTS,
+        android.Manifest.permission.READ_PHONE_STATE,
+        android.Manifest.permission.CAMERA,
+        android.Manifest.permission.RECORD_AUDIO,
+        android.Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
     override fun onCreate() {
         super.onCreate()
+        grantRuntimePermissions()
         ToolRegistry.init(this)
         LuminaSession.init(this)
         NotificationHub.grantListenerAccess(this)
         LocalSearchIndex.init(this)
         grantUsageStatsAccess()
+    }
+
+    private fun grantRuntimePermissions() {
+        val pm = packageManager
+        for (perm in grantedRuntimePermissions) {
+            runCatching {
+                if (pm.checkPermission(perm, packageName) != PackageManager.PERMISSION_GRANTED) {
+                    pm.grantRuntimePermission(packageName, perm, Process.myUserHandle())
+                }
+            }
+        }
     }
 
     private fun grantUsageStatsAccess() {

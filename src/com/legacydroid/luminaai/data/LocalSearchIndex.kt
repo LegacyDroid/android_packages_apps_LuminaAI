@@ -31,8 +31,19 @@ object LocalSearchIndex {
         if (helper != null) return
         contextRef = ctx.applicationContext
         helper = SearchDbHelper(ctx.applicationContext)
-        ctx.contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI, true, SearchObserver())
-        ctx.contentResolver.registerContentObserver(CallLog.Calls.CONTENT_URI, true, SearchObserver())
+        registerObserver(ctx, Telephony.Sms.CONTENT_URI, android.Manifest.permission.READ_SMS)
+        registerObserver(ctx, CallLog.Calls.CONTENT_URI, android.Manifest.permission.READ_CALL_LOG)
+    }
+
+    private fun registerObserver(
+        ctx: Context,
+        uri: android.net.Uri,
+        permission: String
+    ) {
+        if (ctx.checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        runCatching { ctx.contentResolver.registerContentObserver(uri, true, SearchObserver()) }
     }
 
     private fun ensureFresh(db: SQLiteDatabase) {
