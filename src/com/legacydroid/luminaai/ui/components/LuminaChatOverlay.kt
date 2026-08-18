@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -85,6 +86,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -220,67 +222,45 @@ fun LuminaChatOverlay(
                 .padding(top = 16.dp, end = 20.dp)
                 .alpha(closeBtnAlpha.value),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            IconButton(
+            CircleIconButton(
                 onClick = { showMemories = true },
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(controlBg)
-                    .border(0.5.dp, controlBorder, CircleShape)
+                contentDescription = "Memories",
+                icon = Icons.Default.Memory,
+                tint = if (memories.isNotEmpty()) scheme.primary else scheme.onSurfaceVariant,
+                background = controlBg,
+                border = controlBorder
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Memory,
-                        contentDescription = "Memories",
-                        tint = if (memories.isNotEmpty()) scheme.primary else scheme.onSurfaceVariant,
-                        modifier = Modifier.size(15.dp)
+                if (memories.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-4).dp)
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(scheme.primary)
                     )
-                    if (memories.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 4.dp, y = (-4).dp)
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(scheme.primary)
-                        )
-                    }
                 }
             }
             if (messages.size > 1) {
-                IconButton(
+                CircleIconButton(
                     onClick = onClearChat,
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(controlBg)
-                        .border(0.5.dp, controlBorder, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Clear Chat",
-                        tint = scheme.onSurfaceVariant,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-            }
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(controlBg)
-                    .border(0.5.dp, controlBorder, CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close Lumina AI",
-                    tint = scheme.onSurface,
-                    modifier = Modifier.size(15.dp)
+                    contentDescription = "Clear Chat",
+                    icon = Icons.Default.Refresh,
+                    tint = scheme.onSurfaceVariant,
+                    background = controlBg,
+                    border = controlBorder
                 )
             }
+            CircleIconButton(
+                onClick = onClose,
+                contentDescription = "Close Lumina AI",
+                icon = Icons.Default.Close,
+                tint = scheme.onSurface,
+                background = controlBg,
+                border = controlBorder
+            )
         }
 
         val orbProgress = orbMaterialize.value
@@ -510,6 +490,35 @@ private fun MessageBlocks(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CircleIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    icon: ImageVector,
+    tint: Color,
+    background: Color,
+    border: Color,
+    extraContent: @Composable BoxScope.() -> Unit = {}
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(background)
+            .border(0.5.dp, border, CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(15.dp)
+        )
+        extraContent()
     }
 }
 
