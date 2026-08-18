@@ -85,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -504,6 +505,7 @@ private fun MessageBlocks(
                         onSuggestionAction = { approved -> onSuggestionToolAction(block.id, approved) }
                     )
                     is Block.MemoryEvent -> MemoryEventChip(block)
+                    is Block.Note -> NoteChip(block)
                     is Block.Error -> ErrorCard(block)
                 }
             }
@@ -784,6 +786,28 @@ private fun MemoryEventChip(block: Block.MemoryEvent) {
             color = scheme.onSurfaceVariant,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun NoteChip(block: Block.Note) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(scheme.surfaceVariant.copy(alpha = 0.30f))
+            .border(0.5.dp, scheme.outlineVariant.copy(alpha = 0.30f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text("•", fontSize = 11.sp, color = scheme.onSurfaceVariant)
+        Text(
+            text = block.content.take(160),
+            color = scheme.onSurfaceVariant,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace
         )
     }
 }

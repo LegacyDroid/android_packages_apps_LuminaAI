@@ -60,11 +60,12 @@ object LumiApi {
     suspend fun chat(
         context: Context,
         messages: List<ApiMessage>,
-        toolsJson: JSONArray?
+        toolsJson: JSONArray?,
+        systemPrompt: String? = null
     ): LumiResult = withContext(Dispatchers.IO) {
         val config = readConfig(context)
         when (config.provider) {
-            "opencode" -> lumiChat(context, messages, toolsJson, "opencode", config.model)
+            "opencode" -> lumiChat(context, messages, toolsJson, "opencode", config.model, systemPrompt)
             "custom" -> {
                 if (config.customBaseUrl.isBlank() || config.customApiKey.isBlank()) {
                     LumiResult.Error("Custom engine is not configured. Add the base URL and API key in Settings.")
@@ -74,11 +75,12 @@ object LumiApi {
                         config.customApiKey,
                         config.customModel.ifBlank { config.model },
                         messages,
-                        toolsJson
+                        toolsJson,
+                        systemPrompt
                     )
                 }
             }
-            else -> lumiChat(context, messages, toolsJson, "gemini", config.model)
+            else -> lumiChat(context, messages, toolsJson, "gemini", config.model, systemPrompt)
         }
     }
 
@@ -87,13 +89,17 @@ object LumiApi {
         messages: List<ApiMessage>,
         toolsJson: JSONArray?,
         provider: String,
-        model: String
+        model: String,
+        systemPrompt: String? = null
     ): LumiResult {
         val body = JSONObject()
             .put("messages", toLumiMessages(messages))
             .put("provider", provider)
             .put("model", model)
             .put("max_tokens", MAX_TOKENS)
+        if (!systemPrompt.isNullOrBlank()) {
+            body.put("system", systemPrompt)
+        }
         if (toolsJson != null && toolsJson.length() > 0) {
             body.put("tools", toolsJson)
             body.put("tool_choice", "auto")
@@ -124,16 +130,23 @@ object LumiApi {
         apiKey: String,
         model: String,
         messages: List<ApiMessage>,
-        toolsJson: JSONArray?
+        toolsJson: JSONArray?,
+        systemPrompt: String? = null
     ): LumiResult {
         var url = baseUrl.trim().trimEnd('/')
         if (!url.endsWith("/chat/completions")) {
             url = if (url.endsWith("/v1")) "$url/chat/completions" else "$url/v1/chat/completions"
         }
 
+        val fullMessages = if (systemPrompt.isNullOrBlank()) {
+            messages
+        } else {
+            listOf(ApiMessage(role = "system", content = systemPrompt)) + messages
+        }
+
         val body = JSONObject()
             .put("model", model)
-            .put("messages", toLumiMessages(messages))
+            .put("messages", toLumiMessages(fullMessages))
             .put("temperature", 0.7)
             .put("max_tokens", MAX_TOKENS)
         if (toolsJson != null && toolsJson.length() > 0) {

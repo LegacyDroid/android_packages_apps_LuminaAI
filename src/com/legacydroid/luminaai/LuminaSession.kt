@@ -184,10 +184,21 @@ object LuminaSession {
             }
             val apiMessages = buildApiMessages()
             val tools = ToolRegistry.enabledToolsJson()
-            when (val result = LumiApi.chat(context, apiMessages, tools)) {
+            when (val result = LumiApi.chat(context, apiMessages, tools, ToolRegistry.protocolSystemPrompt())) {
                 is LumiResult.Success -> {
-                    appendAssistant(listOf(Block.Text(result.reply)))
-                    return
+                    val protocol = parseProtocolReply(result.reply)
+                    if (protocol == null) {
+                        appendAssistant(listOf(Block.Text(result.reply)))
+                        return
+                    }
+                    val blocks = mutableListOf<Block>()
+                    if (protocol.message.isNotBlank()) blocks += Block.Text(protocol.message)
+                    if (protocol.calls.isEmpty()) {
+                        appendAssistant(blocks)
+                        return
+                    }
+                    appendAssistant(blocks)
+                    handleToolCalls(protocol.calls, gate, appendResultNotes = true)
                 }
                 is LumiResult.ToolCalls -> {
                     val continueLoop = handleToolCalls(result.calls, gate)
@@ -220,7 +231,11 @@ object LuminaSession {
         }
     }
 
-    private suspend fun handleToolCalls(calls: List<ApiToolCall>, gate: ApprovalGate): Boolean {
+    private suspend fun handleToolCalls(
+        calls: List<ApiToolCall>,
+        gate: ApprovalGate,
+        appendResultNotes: Boolean = false
+    ): Boolean {
         val assistantBlocks = mutableListOf<Block>()
         for (call in calls) {
             val spec = ToolRegistry.find(call.name)
@@ -290,6 +305,9 @@ object LuminaSession {
                     )
                 }
                 onToolExecuted(block.name, resultJson)
+                if (appendResultNotes) {
+                    appendNote("tool ${block.name} result: $resultJson")
+                }
             }
         }
         return true
@@ -370,6 +388,14 @@ object LuminaSession {
         )
     }
 
+    private fun appendNote(content: String) {
+        val lastAssistant = messages.lastOrNull { it.role == Role.ASSISTANT } ?: return
+        val idx = messages.indexOf(lastAssistant)
+        messages[idx] = lastAssistant.copy(
+            blocks = lastAssistant.blocks + Block.Note(content = content)
+        )
+    }
+
     private fun updateBlock(blockId: String, transform: (Block.ToolCall) -> Block.ToolCall) {
         val idx = messages.indexOfFirst { m -> m.blocks.any { it is Block.ToolCall && it.id == blockId } }
         if (idx < 0) return
@@ -401,11 +427,15 @@ object LuminaSession {
                 }
                 Role.ASSISTANT -> {
                     val text = msg.blocks.filterIsInstance<Block.Text>().joinToString("\n") { it.content }
+                    val notes = msg.blocks.filterIsInstance<Block.Note>().joinToString("\n") { it.content }
+                    val content = listOf(text, notes)
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
                     val calls = msg.blocks.filterIsInstance<Block.ToolCall>()
-                    if (text.isNotBlank() || calls.isNotEmpty()) {
+                    if (content.isNotBlank() || calls.isNotEmpty()) {
                         out += ApiMessage(
                             role = "assistant",
-                            content = text,
+                            content = content,
                             toolCalls = calls.map {
                                 ApiToolCall(
                                     id = it.id,
@@ -465,6 +495,41 @@ object LuminaSession {
     fun clearMemories() {
         MemoryStore.deleteAll()
         refreshMemories()
+    }
+
+    private data class ProtocolReply(
+        val message: String,
+        val calls: List<ApiToolCall>
+    )
+
+    private fun parseProtocolReply(reply: String): ProtocolReply? {
+        var text = reply.trim()
+        if (text.startsWith("```")) {
+            text = text.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        }
+        val json = runCatching { JSONObject(text) }.getOrNull() ?: return null
+        val message = json.optString("message", "")
+        val calls = mutableListOf<ApiToolCall>()
+        val executes = json.optJSONArray("execute")
+        if (executes != null) {
+            for (i in 0 until executes.length()) {
+                val e = executes.optJSONObject(i) ?: continue
+                val tool = e.optString("tool").trim()
+                if (tool.isBlank()) continue
+                val args = e.opt("arguments")
+                calls += ApiToolCall(
+                    id = "call_${tool}_${System.currentTimeMillis()}_$i",
+                    name = tool,
+                    paramsJson = when (args) {
+                        is JSONObject -> args.toString()
+                        is String -> args
+                        else -> "{}"
+                    }
+                )
+            }
+        }
+        if (message.isBlank() && calls.isEmpty()) return null
+        return ProtocolReply(message, calls)
     }
 
     private class ApprovalGate {

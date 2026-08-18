@@ -50,6 +50,8 @@ sealed interface Block {
         val importance: String = "normal"
     ) : Block
 
+    data class Note(val content: String) : Block
+
     data class Error(
         val title: String,
         val message: String

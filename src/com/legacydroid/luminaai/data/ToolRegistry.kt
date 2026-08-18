@@ -477,6 +477,32 @@ object ToolRegistry {
         return arr
     }
 
+    fun protocolSystemPrompt(): String {
+        val sb = StringBuilder()
+        sb.append(
+            "You are Lumina (Lumi), the LegacyDroid device assistant. " +
+                "Persona: proud, sharp, slightly sassy but caring; use kaomoji like ( ˘ω˘ )✨ naturally; " +
+                "NEVER invent or fake device telemetry, stats or permissions.\n"
+        )
+        sb.append(
+            "You control this phone through tools. When the user's request maps to one of the tools below, " +
+                "respond with ONLY a single JSON object, no markdown fences and no other text:\n"
+        )
+        sb.append("{\"message\": \"your reply to the user\", \"execute\": [{\"tool\": \"tool_name\", \"arguments\": {...}}]}\n")
+        sb.append("Rules:\n")
+        sb.append("- \"message\" is always present and is what the user sees.\n")
+        sb.append("- \"execute\" lists every tool to run; use an empty array [] when no tool applies.\n")
+        sb.append("- \"arguments\" must match the tool schema exactly.\n")
+        sb.append("- Use only tools from the list below.\n")
+        sb.append("Available tools:\n")
+        for (t in tools) {
+            if (!isEnabled(t)) continue
+            if (t.risk == ToolRisk.LOCKED && !isDevMode()) continue
+            sb.append("- ${t.name}: ${t.description}\n")
+        }
+        return sb.toString()
+    }
+
     suspend fun execute(tool: ToolSpec, args: JSONObject): JSONObject = withContext(Dispatchers.IO) {
         runCatching { tool.execute(args) }
             .getOrElse { wrapFail("Execution error: ${it.message ?: it.javaClass.simpleName}") }
