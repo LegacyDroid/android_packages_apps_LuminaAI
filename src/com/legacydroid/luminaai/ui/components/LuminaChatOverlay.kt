@@ -461,7 +461,10 @@ private fun MessageBlocks(
 ) {
     if (message.role == Role.USER) {
         val text = message.blocks.filterIsInstance<Block.Text>().joinToString("\n") { it.content }
-        TypewriterBubble(text = text, isUser = true)
+        if (text.isNotBlank()) {
+            TypewriterBubble(text = text, isUser = true)
+        }
+        message.blocks.filterIsInstance<Block.Note>().forEach { NoteChip(it) }
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             message.blocks.forEachIndexed { index, block ->

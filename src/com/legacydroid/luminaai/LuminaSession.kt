@@ -237,6 +237,7 @@ object LuminaSession {
         appendResultNotes: Boolean = false
     ): Boolean {
         val assistantBlocks = mutableListOf<Block>()
+        val protocolNotes = mutableListOf<String>()
         for (call in calls) {
             val spec = ToolRegistry.find(call.name)
             val block = when {
@@ -282,7 +283,12 @@ object LuminaSession {
         appendAssistant(assistantBlocks)
 
         for (block in assistantBlocks.filterIsInstance<Block.ToolCall>()) {
-            if (block.status == ToolStatus.FAILED) continue
+            if (block.status == ToolStatus.FAILED) {
+                if (appendResultNotes) {
+                    protocolNotes += "tool ${block.name} result: ${block.result ?: "{}"}"
+                }
+                continue
+            }
             val approved = if (block.risk != com.legacydroid.luminaai.model.ToolRisk.AUTO) {
                 pendingApproval = block
                 activeGate = gate
@@ -291,6 +297,9 @@ object LuminaSession {
                 pendingApproval = null
                 if (!decision) {
                     updateBlock(block.id) { it.copy(status = ToolStatus.FAILED, result = """{"success":false,"error":"declined by user"}""") }
+                    if (appendResultNotes) {
+                        protocolNotes += "tool ${block.name} declined by user"
+                    }
                     continue
                 }
                 true
@@ -310,9 +319,15 @@ object LuminaSession {
                 }
                 onToolExecuted(block.name, resultJson)
                 if (appendResultNotes) {
-                    appendNote("tool ${block.name} result: $resultJson")
+                    protocolNotes += "tool ${block.name} result: $resultJson"
                 }
             }
+        }
+        if (appendResultNotes && protocolNotes.isNotEmpty()) {
+            messages += ChatMessage(
+                role = Role.USER,
+                blocks = protocolNotes.map { Block.Note(content = it) }
+            )
         }
         return true
     }
@@ -392,14 +407,6 @@ object LuminaSession {
         )
     }
 
-    private fun appendNote(content: String) {
-        val lastAssistant = messages.lastOrNull { it.role == Role.ASSISTANT } ?: return
-        val idx = messages.indexOf(lastAssistant)
-        messages[idx] = lastAssistant.copy(
-            blocks = lastAssistant.blocks + Block.Note(content = content)
-        )
-    }
-
     private fun updateBlock(blockId: String, transform: (Block.ToolCall) -> Block.ToolCall) {
         val idx = messages.indexOfFirst { m -> m.blocks.any { it is Block.ToolCall && it.id == blockId } }
         if (idx < 0) return
@@ -421,9 +428,13 @@ object LuminaSession {
             when (msg.role) {
                 Role.USER -> {
                     val text = msg.blocks.filterIsInstance<Block.Text>().joinToString("\n") { it.content }
-                    var content = text
+                    val notes = msg.blocks.filterIsInstance<Block.Note>().joinToString("\n") { it.content }
+                    var content = listOf(text, notes)
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
+                    if (content.isBlank()) return@when
                     if (!injected && memorySummary.isNotEmpty()) {
-                        content = "[Memory context]\n$memorySummary\n[/Memory context]\n\n$text"
+                        content = "[Memory context]\n$memorySummary\n[/Memory context]\n\n$content"
                         injected = true
                         memoryInjectedThisSession = true
                     }
