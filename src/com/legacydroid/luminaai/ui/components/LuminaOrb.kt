@@ -14,7 +14,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -31,8 +30,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Material-colored orb: rotating primary/secondary/tertiary conic gradient,
- * specular highlight, tertiary fill layer, inset 3D rim, pulsing white core,
- * slow rotation and vertical float.
+ * specular highlight, tertiary fill layer, inset 3D rim, pulsing white core
+ * and slow rotation.
  */
 @Composable
 fun LuminaOrb(
@@ -53,16 +52,6 @@ fun LuminaOrb(
             repeatMode = RepeatMode.Restart
         ),
         label = "orbSlowRotate"
-    )
-
-    val floatOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "orbFloat"
     )
 
     val corePulse by infiniteTransition.animateFloat(
@@ -88,7 +77,6 @@ fun LuminaOrb(
     Box(
         modifier = modifier
             .size(size * 2.2f)
-            .offset(y = floatOffset.dp)
             .scale(scale),
         contentAlignment = Alignment.Center
     ) {

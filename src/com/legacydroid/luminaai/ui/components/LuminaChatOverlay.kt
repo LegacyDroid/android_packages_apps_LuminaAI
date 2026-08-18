@@ -72,9 +72,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -126,6 +128,7 @@ fun LuminaChatOverlay(
     var showMemories by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scheme = MaterialTheme.colorScheme
+    val typedKeys = remember { mutableStateMapOf<String, Boolean>() }
 
     val orbMaterialize = remember { Animatable(0f) }
     val labelAlpha = remember { Animatable(0f) }
@@ -285,7 +288,7 @@ fun LuminaChatOverlay(
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = orbTopOffset + 75.dp)
+                .offset(y = orbTopOffset + 186.dp)
                 .alpha(labelAlpha.value),
             contentAlignment = Alignment.Center
         ) {
@@ -332,6 +335,7 @@ fun LuminaChatOverlay(
                         MessageBlocks(
                             message = msg,
                             pendingApproval = pendingApproval,
+                            typedKeys = typedKeys,
                             onApprove = onApprove,
                             onDeny = onDeny,
                             onSuggestionToolAction = onSuggestionToolAction
@@ -455,6 +459,7 @@ fun LuminaChatOverlay(
 private fun MessageBlocks(
     message: ChatMessage,
     pendingApproval: Block.ToolCall?,
+    typedKeys: SnapshotStateMap<String, Boolean>,
     onApprove: () -> Unit,
     onDeny: () -> Unit,
     onSuggestionToolAction: (String, Boolean) -> Unit
@@ -466,7 +471,17 @@ private fun MessageBlocks(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             message.blocks.forEachIndexed { index, block ->
                 when (block) {
-                    is Block.Text -> TypewriterBubble(text = block.content, isUser = false, key = message.id + index)
+                    is Block.Text -> {
+                        val effectKey = message.id + index
+                        val isFresh = typedKeys[effectKey] != true
+                        if (isFresh) typedKeys[effectKey] = true
+                        TypewriterBubble(
+                            text = block.content,
+                            isUser = false,
+                            key = effectKey,
+                            animate = isFresh
+                        )
+                    }
                     is Block.ToolCall -> ToolCallCard(
                         block = block,
                         isPendingApproval = pendingApproval?.id == block.id,
@@ -486,11 +501,12 @@ private fun MessageBlocks(
 private fun TypewriterBubble(
     text: String,
     isUser: Boolean,
-    key: Any = text
+    key: Any = text,
+    animate: Boolean = true
 ) {
     val scheme = MaterialTheme.colorScheme
     var displayedText by remember(key) {
-        mutableStateOf(if (isUser) text else "")
+        mutableStateOf(if (isUser || !animate) text else "")
     }
     val appearProgress = remember(key) { Animatable(0f) }
 
@@ -499,7 +515,7 @@ private fun TypewriterBubble(
             targetValue = 1f,
             animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f))
         )
-        if (!isUser && text.isNotEmpty()) {
+        if (animate && !isUser && text.isNotEmpty()) {
             displayedText = ""
             val step = if (text.length > 400) 3 else 1
             var i = 0
@@ -844,6 +860,12 @@ private fun MemoriesSheet(
                 }
             }
         }
+        Text(
+            text = "Importance: high = always in context, normal = standard, low = rarely recalled",
+            color = scheme.onSurfaceVariant,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+        )
 
         if (memories.isEmpty()) {
             Text(
