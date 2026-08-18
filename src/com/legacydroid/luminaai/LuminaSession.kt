@@ -432,7 +432,7 @@ object LuminaSession {
                     var content = listOf(text, notes)
                         .filter { it.isNotBlank() }
                         .joinToString("\n")
-                    if (content.isBlank()) return@when
+                    if (content.isBlank()) continue
                     if (!injected && memorySummary.isNotEmpty()) {
                         content = "[Memory context]\n$memorySummary\n[/Memory context]\n\n$content"
                         injected = true
