@@ -7,6 +7,14 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
+prebuilt_etc {
+    name: "privapp_permissions_com.legacydroid.luminaai",
+    system_ext_specific: true,
+    sub_dir: "permissions",
+    src: "privapp-permissions-com.legacydroid.luminaai.xml",
+    filename_from_src: true,
+}
+
 android_app {
     name: "LuminaAI",
 
@@ -20,6 +28,10 @@ android_app {
 
     privileged: true,
     system_ext_specific: true,
+
+    required: [
+        "privapp_permissions_com.legacydroid.luminaai",
+    ],
 
     optimize: {
         enabled: true,
