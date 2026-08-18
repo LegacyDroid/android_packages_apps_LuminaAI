@@ -186,6 +186,20 @@ fun LuminaChatOverlay(
         }
     }
 
+    LaunchedEffect(isThinking) {
+        while (isThinking) {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            val nearBottom = last == null ||
+                (last.index >= info.totalItemsCount - 1 &&
+                    last.offset + last.size >= info.viewportEndOffset)
+            if (nearBottom && info.totalItemsCount > 0) {
+                listState.scrollToItem(info.totalItemsCount - 1)
+            }
+            delay(250)
+        }
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
