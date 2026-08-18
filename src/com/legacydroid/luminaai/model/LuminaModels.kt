@@ -41,7 +41,8 @@ sealed interface Block {
         val params: String,
         val risk: ToolRisk,
         val status: ToolStatus = ToolStatus.PENDING,
-        val result: String? = null
+        val result: String? = null,
+        val protocol: Boolean = false
     ) : Block
 
     data class MemoryEvent(
@@ -68,7 +69,8 @@ data class ChatMessage(
 data class ApiToolCall(
     val id: String,
     val name: String,
-    val paramsJson: String
+    val paramsJson: String,
+    val thoughtSignature: String? = null
 )
 
 data class ApiMessage(

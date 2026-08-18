@@ -246,7 +246,8 @@ object LuminaSession {
                     params = call.paramsJson,
                     risk = com.legacydroid.luminaai.model.ToolRisk.AUTO,
                     status = ToolStatus.FAILED,
-                    result = """{"success":false,"error":"unknown tool '${call.name}'"}"""
+                    result = """{"success":false,"error":"unknown tool '${call.name}'"}""",
+                    protocol = appendResultNotes
                 )
                 !ToolRegistry.isEnabled(spec) -> Block.ToolCall(
                     name = spec.name,
@@ -254,7 +255,8 @@ object LuminaSession {
                     params = call.paramsJson,
                     risk = spec.risk,
                     status = ToolStatus.FAILED,
-                    result = """{"success":false,"error":"tool '${spec.name}' is disabled in Settings"}"""
+                    result = """{"success":false,"error":"tool '${spec.name}' is disabled in Settings"}""",
+                    protocol = appendResultNotes
                 )
                 spec.risk == com.legacydroid.luminaai.model.ToolRisk.LOCKED && !ToolRegistry.isDevMode() ->
                     Block.ToolCall(
@@ -263,14 +265,16 @@ object LuminaSession {
                         params = call.paramsJson,
                         risk = spec.risk,
                         status = ToolStatus.FAILED,
-                        result = """{"success":false,"error":"tool '${spec.name}' is locked; enable Unsafe Developer Mode in Settings"}"""
+                        result = """{"success":false,"error":"tool '${spec.name}' is locked; enable Unsafe Developer Mode in Settings"}""",
+                        protocol = appendResultNotes
                     )
                 else -> Block.ToolCall(
                     name = spec.name,
                     label = spec.label,
                     params = call.paramsJson,
                     risk = spec.risk,
-                    status = ToolStatus.PENDING
+                    status = ToolStatus.PENDING,
+                    protocol = appendResultNotes
                 )
             }
             assistantBlocks += block
@@ -431,7 +435,7 @@ object LuminaSession {
                     val content = listOf(text, notes)
                         .filter { it.isNotBlank() }
                         .joinToString("\n")
-                    val calls = msg.blocks.filterIsInstance<Block.ToolCall>()
+                    val calls = msg.blocks.filterIsInstance<Block.ToolCall>().filter { !it.protocol }
                     if (content.isNotBlank() || calls.isNotEmpty()) {
                         out += ApiMessage(
                             role = "assistant",

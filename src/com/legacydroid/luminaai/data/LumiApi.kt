@@ -100,7 +100,7 @@ object LumiApi {
         if (!systemPrompt.isNullOrBlank()) {
             body.put("system", systemPrompt)
         }
-        if (toolsJson != null && toolsJson.length() > 0) {
+        if (provider != "gemini" && toolsJson != null && toolsJson.length() > 0) {
             body.put("tools", toolsJson)
             body.put("tool_choice", "auto")
         }
@@ -187,7 +187,8 @@ object LumiApi {
                     is JSONObject -> args.toString()
                     is String -> args
                     else -> "{}"
-                }
+                },
+                thoughtSignature = o.optString("thought_signature").ifBlank { null }
             )
         }
     }
@@ -201,17 +202,17 @@ object LumiApi {
             if (m.role == "assistant" && !m.toolCalls.isNullOrEmpty()) {
                 val calls = JSONArray()
                 for (tc in m.toolCalls) {
-                    calls.put(
-                        JSONObject()
-                            .put("id", tc.id)
-                            .put("type", "function")
-                            .put(
-                                "function",
-                                JSONObject()
-                                    .put("name", tc.name)
-                                    .put("arguments", tc.paramsJson)
-                            )
-                    )
+                    val call = JSONObject()
+                        .put("id", tc.id)
+                        .put("type", "function")
+                        .put(
+                            "function",
+                            JSONObject()
+                                .put("name", tc.name)
+                                .put("arguments", tc.paramsJson)
+                        )
+                    tc.thoughtSignature?.let { call.put("thought_signature", it) }
+                    calls.put(call)
                 }
                 o.put("tool_calls", calls)
             }
