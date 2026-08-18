@@ -48,6 +48,8 @@ private fun LuminaRootContent() {
     val shockwaveToken = LuminaSession.shockwaveToken
     val messages = LuminaSession.messages
     val isThinking = LuminaSession.isThinking
+    val pendingApproval = LuminaSession.pendingApproval
+    val memories = LuminaSession.memories
 
     val scheme = MaterialTheme.colorScheme
 
@@ -145,9 +147,18 @@ private fun LuminaRootContent() {
             LuminaChatOverlay(
                 messages = messages,
                 isThinking = isThinking,
+                pendingApproval = pendingApproval,
+                memories = memories,
                 onSendMessage = LuminaSession::sendMessage,
                 onClose = LuminaSession::dismiss,
-                onClearChat = LuminaSession::clearChat
+                onClearChat = LuminaSession::clearChat,
+                onApprove = LuminaSession::approvePending,
+                onDeny = LuminaSession::denyPending,
+                onSuggestionToolAction = LuminaSession::onSuggestionToolAction,
+                onAddMemory = LuminaSession::addMemory,
+                onEditMemory = LuminaSession::editMemory,
+                onDeleteMemory = LuminaSession::deleteMemory,
+                onClearMemories = LuminaSession::clearMemories
             )
         }
     }

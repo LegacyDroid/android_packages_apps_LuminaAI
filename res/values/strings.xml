@@ -5,4 +5,5 @@
 -->
 <resources>
     <string name="app_name">LuminaAI</string>
+    <string name="notification_listener_label">Lumina AI notifications</string>
 </resources>

@@ -5,27 +5,44 @@
 
 package com.legacydroid.luminaai
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.legacydroid.luminaai.data.LuminaEngine
+import com.legacydroid.luminaai.data.LumiApi
+import com.legacydroid.luminaai.data.LumiResult
+import com.legacydroid.luminaai.data.MemoryEntry
+import com.legacydroid.luminaai.data.MemoryStore
+import com.legacydroid.luminaai.data.NotificationHub
+import com.legacydroid.luminaai.data.PrivacyAudit
+import com.legacydroid.luminaai.data.ToolRegistry
+import com.legacydroid.luminaai.model.ApiMessage
+import com.legacydroid.luminaai.model.ApiToolCall
+import com.legacydroid.luminaai.model.Block
 import com.legacydroid.luminaai.model.ChatMessage
 import com.legacydroid.luminaai.model.LuminaState
+import com.legacydroid.luminaai.model.Role
+import com.legacydroid.luminaai.model.ToolStatus
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import org.json.JSONObject
+import java.util.UUID
+import kotlin.coroutines.resume
 
-/**
- * Singleton Compose state holder shared with the overlay activity.
- * The orchestration timings mirror the HTML/CSS prototype: overlay 120ms after
- * the ripple begins, greeting 2400ms after awakening, 700ms close fade.
- */
 object LuminaSession {
 
+    private const val MAX_LOOP_ROUNDS = 6
+    private const val MAX_HISTORY_MESSAGES = 20
+
+    private lateinit var context: Context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     var state by mutableStateOf(LuminaState.IDLE)
@@ -35,13 +52,24 @@ object LuminaSession {
     val messages = mutableStateListOf<ChatMessage>()
     var isThinking by mutableStateOf(false)
         private set
+    var pendingApproval by mutableStateOf<Block.ToolCall?>(null)
+        private set
+    var memories by mutableStateOf(MemoryStore.load())
+        private set
 
-    /** Called by the overlay activity once the session goes idle (overlay closed). */
     var onIdle: (() -> Unit)? = null
+
+    private var runningJob: Job? = null
+    private var memoryInjectedThisSession = false
+    private var activeGate: ApprovalGate? = null
+
+    fun init(ctx: Context) {
+        context = ctx.applicationContext
+        refreshMemories()
+    }
 
     fun awaken() {
         if (state == LuminaState.AWAKENED) {
-            // Already awake: replay the shockwave so a re-trigger stays visible.
             shockwaveToken = System.currentTimeMillis()
             return
         }
@@ -51,39 +79,404 @@ object LuminaSession {
             state = LuminaState.AWAKENED
             if (messages.isEmpty()) {
                 delay(2400)
-                messages += ChatMessage(
-                    text = "Hi, I'm Lumina. How can I help you today?", isUser = false)
+                if (messages.isEmpty()) {
+                    greeting()
+                }
             }
+        }
+    }
+
+    private suspend fun greeting() {
+        val violations = PrivacyAudit.audit(context)
+        val list = violations.optJSONArray("violations")
+        if (list != null && list.length() > 0) {
+            val sb = StringBuilder(
+                "I just ran my background privacy audit and found a few things you'll want to see, Boss.\n\n"
+            )
+            val suggestionBlocks = mutableListOf<Block>()
+            for (i in 0 until list.length().coerceAtMost(3)) {
+                val v = list.getJSONObject(i)
+                val app = v.optString("app")
+                val perm = v.optString("permission")
+                val count = v.optInt("background_accesses")
+                sb.append("• ${app} accessed ${perm} $count times in the background over the last 24h\n")
+                suggestionBlocks += Block.ToolCall(
+                    name = "revoke_permission",
+                    label = "Revoke $perm from $app",
+                    params = JSONObject()
+                        .put("app", v.optString("package"))
+                        .put("permission", perm)
+                        .toString(),
+                    risk = com.legacydroid.luminaai.model.ToolRisk.CONFIRM,
+                    status = ToolStatus.PENDING
+                )
+            }
+            sb.append("\nShould I revoke any of these? Tap a card to confirm. ( > ᴗ < )")
+            messages += ChatMessage(
+                role = Role.ASSISTANT,
+                blocks = listOf(Block.Text(sb.toString())) + suggestionBlocks
+            )
+        } else {
+            messages += ChatMessage(
+                role = Role.ASSISTANT,
+                blocks = listOf(
+                    Block.Text("Hi, I'm Lumina. How can I help you today? ( ˘ω˘ )✨")
+                )
+            )
         }
     }
 
     fun dismiss() {
         if (state != LuminaState.AWAKENED) return
         scope.launch {
+            runningJob?.cancel()
+            isThinking = false
+            pendingApproval = null
             state = LuminaState.CLOSING
             delay(700)
             messages.clear()
+            memoryInjectedThisSession = false
             state = LuminaState.IDLE
             onIdle?.invoke()
         }
     }
 
     fun clearChat() {
+        runningJob?.cancel()
+        isThinking = false
+        pendingApproval = null
         messages.clear()
+        memoryInjectedThisSession = false
         messages += ChatMessage(
-            text = "Conversation cleared. How can I assist you?", isUser = false)
+            role = Role.ASSISTANT,
+            blocks = listOf(Block.Text("Conversation cleared. How can I assist you? ( ˘ω˘ )"))
+        )
     }
 
     fun sendMessage(query: String) {
-        if (query.isBlank()) return
-        messages += ChatMessage(text = query, isUser = true)
-        isThinking = true
+        if (query.isBlank() || isThinking || state != LuminaState.AWAKENED) return
+        val gate = ApprovalGate()
+        messages += ChatMessage(role = Role.USER, blocks = listOf(Block.Text(query)))
+        runningJob = scope.launch {
+            isThinking = true
+            try {
+                agentLoop(gate)
+            } finally {
+                isThinking = false
+                pendingApproval = null
+            }
+        }
+    }
+
+    private suspend fun agentLoop(gate: ApprovalGate) {
+        var rounds = 0
+        while (true) {
+            if (++rounds > MAX_LOOP_ROUNDS) {
+                appendAssistant(
+                    listOf(
+                        Block.Error(
+                            "Tool limit reached",
+                            "Lumina stopped after $MAX_LOOP_ROUNDS tool rounds. Try a simpler request."
+                        )
+                    )
+                )
+                return
+            }
+            val apiMessages = buildApiMessages()
+            val tools = ToolRegistry.enabledToolsJson()
+            when (val result = LumiApi.chat(context, apiMessages, tools)) {
+                is LumiResult.Success -> {
+                    appendAssistant(listOf(Block.Text(result.reply)))
+                    return
+                }
+                is LumiResult.ToolCalls -> {
+                    val continueLoop = handleToolCalls(result.calls, gate)
+                    if (!continueLoop) return
+                }
+                is LumiResult.RateLimited -> {
+                    appendAssistant(
+                        listOf(
+                            Block.Error(
+                                "Slow down, Boss",
+                                result.message.ifBlank { "Rate limit reached. Wait a minute and retry." }
+                            )
+                        )
+                    )
+                    return
+                }
+                is LumiResult.TrialExpired -> {
+                    appendAssistant(
+                        listOf(
+                            Block.Error("Trial expired", result.message)
+                        )
+                    )
+                    return
+                }
+                is LumiResult.Error -> {
+                    appendAssistant(listOf(Block.Error("Connection problem", result.message)))
+                    return
+                }
+            }
+        }
+    }
+
+    private suspend fun handleToolCalls(calls: List<ApiToolCall>, gate: ApprovalGate): Boolean {
+        val assistantBlocks = mutableListOf<Block>()
+        for (call in calls) {
+            val spec = ToolRegistry.find(call.name)
+            val block = when {
+                spec == null -> Block.ToolCall(
+                    name = call.name,
+                    label = call.name.replace('_', ' '),
+                    params = call.paramsJson,
+                    risk = com.legacydroid.luminaai.model.ToolRisk.AUTO,
+                    status = ToolStatus.FAILED,
+                    result = """{"success":false,"error":"unknown tool '${call.name}'"}"""
+                )
+                !ToolRegistry.isEnabled(spec) -> Block.ToolCall(
+                    name = spec.name,
+                    label = spec.label,
+                    params = call.paramsJson,
+                    risk = spec.risk,
+                    status = ToolStatus.FAILED,
+                    result = """{"success":false,"error":"tool '${spec.name}' is disabled in Settings"}"""
+                )
+                spec.risk == com.legacydroid.luminaai.model.ToolRisk.LOCKED && !ToolRegistry.isDevMode() ->
+                    Block.ToolCall(
+                        name = spec.name,
+                        label = spec.label,
+                        params = call.paramsJson,
+                        risk = spec.risk,
+                        status = ToolStatus.FAILED,
+                        result = """{"success":false,"error":"tool '${spec.name}' is locked; enable Unsafe Developer Mode in Settings"}"""
+                    )
+                else -> Block.ToolCall(
+                    name = spec.name,
+                    label = spec.label,
+                    params = call.paramsJson,
+                    risk = spec.risk,
+                    status = ToolStatus.PENDING
+                )
+            }
+            assistantBlocks += block
+        }
+        appendAssistant(assistantBlocks)
+
+        for (block in assistantBlocks.filterIsInstance<Block.ToolCall>()) {
+            if (block.status == ToolStatus.FAILED) continue
+            val approved = if (block.risk != com.legacydroid.luminaai.model.ToolRisk.AUTO) {
+                pendingApproval = block
+                activeGate = gate
+                val decision = gate.await()
+                activeGate = null
+                pendingApproval = null
+                if (!decision) {
+                    updateBlock(block.id) { it.copy(status = ToolStatus.FAILED, result = """{"success":false,"error":"declined by user"}""") }
+                    continue
+                }
+                true
+            } else true
+
+            if (approved) {
+                updateBlock(block.id) { it.copy(status = ToolStatus.RUNNING) }
+                val params = runCatching { JSONObject(block.params) }.getOrElse { JSONObject() }
+                val spec = ToolRegistry.find(block.name) ?: continue
+                val resultJson = ToolRegistry.execute(spec, params)
+                val ok = resultJson.optBoolean("success")
+                updateBlock(block.id) {
+                    it.copy(
+                        status = if (ok) ToolStatus.DONE else ToolStatus.FAILED,
+                        result = resultJson.toString()
+                    )
+                }
+                onToolExecuted(block.name, resultJson)
+            }
+        }
+        return true
+    }
+
+    private fun onToolExecuted(toolName: String, result: JSONObject) {
+        when (toolName) {
+            "remember_memory", "forget_memory" -> {
+                refreshMemories()
+                if (result.optBoolean("success")) {
+                    val data = result.optJSONObject("data")
+                    val action = if (toolName == "remember_memory") "saved" else "forgotten"
+                    val mem = data?.optString(if (toolName == "remember_memory") "content" else "forgotten")
+                        ?: ""
+                    appendMemoryEvent(action, mem)
+                }
+            }
+            "search_memories" -> {
+                val mems = result.optJSONObject("data")?.optJSONArray("memories")
+                if (mems != null && mems.length() > 0) {
+                    appendMemoryEvent("recalled", "found ${mems.length()} memory")
+                }
+            }
+        }
+    }
+
+    fun approvePending() {
+        activeGate?.resolve(true)
+    }
+
+    fun denyPending() {
+        activeGate?.resolve(false)
+    }
+
+    fun onSuggestionToolAction(blockId: String, approved: Boolean) {
+        val messageIdx = messages.indexOfFirst { m ->
+            m.blocks.any { it is Block.ToolCall && it.id == blockId }
+        }
+        if (messageIdx < 0) return
+        val block = (messages[messageIdx].blocks.first { it is Block.ToolCall && it.id == blockId } as Block.ToolCall)
         scope.launch {
-            delay(280)
-            val response = LuminaEngine.getResponse(query)
-            delay(1000)
-            isThinking = false
-            messages += ChatMessage(text = response, isUser = false)
+            if (!approved) {
+                updateBlock(blockId) {
+                    it.copy(status = ToolStatus.FAILED, result = """{"success":false,"error":"declined by user"}""")
+                }
+                return@launch
+            }
+            updateBlock(blockId) { it.copy(status = ToolStatus.RUNNING) }
+            val spec = ToolRegistry.find(block.name)
+            if (spec == null) {
+                updateBlock(blockId) { it.copy(status = ToolStatus.FAILED, result = """{"success":false,"error":"unknown tool"}""") }
+                return@launch
+            }
+            val params = runCatching { JSONObject(block.params) }.getOrElse { JSONObject() }
+            val result = ToolRegistry.execute(spec, params)
+            val ok = result.optBoolean("success")
+            updateBlock(blockId) {
+                it.copy(status = if (ok) ToolStatus.DONE else ToolStatus.FAILED, result = result.toString())
+            }
+            onToolExecuted(block.name, result)
+        }
+    }
+
+    private fun appendUser(text: String) {
+        messages += ChatMessage(role = Role.USER, blocks = listOf(Block.Text(text)))
+    }
+
+    private fun appendAssistant(blocks: List<Block>) {
+        if (blocks.isEmpty()) return
+        messages += ChatMessage(role = Role.ASSISTANT, blocks = blocks)
+    }
+
+    private fun appendMemoryEvent(action: String, content: String) {
+        val lastAssistant = messages.lastOrNull { it.role == Role.ASSISTANT } ?: return
+        val idx = messages.indexOf(lastAssistant)
+        messages[idx] = lastAssistant.copy(
+            blocks = lastAssistant.blocks + Block.MemoryEvent(action = action, content = content)
+        )
+    }
+
+    private fun updateBlock(blockId: String, transform: (Block.ToolCall) -> Block.ToolCall) {
+        val idx = messages.indexOfFirst { m -> m.blocks.any { it is Block.ToolCall && it.id == blockId } }
+        if (idx < 0) return
+        val msg = messages[idx]
+        messages[idx] = msg.copy(
+            blocks = msg.blocks.map { b ->
+                if (b is Block.ToolCall && b.id == blockId) transform(b) else b
+            }
+        )
+    }
+
+    private fun buildApiMessages(): List<ApiMessage> {
+        val out = mutableListOf<ApiMessage>()
+        val memorySummary = if (!memoryInjectedThisSession) MemoryStore.summary(8) else ""
+        val history = messages.takeLast(MAX_HISTORY_MESSAGES)
+
+        var injected = false
+        for (msg in history) {
+            when (msg.role) {
+                Role.USER -> {
+                    val text = msg.blocks.filterIsInstance<Block.Text>().joinToString("\n") { it.content }
+                    var content = text
+                    if (!injected && memorySummary.isNotEmpty()) {
+                        content = "[Memory context]\n$memorySummary\n[/Memory context]\n\n$text"
+                        injected = true
+                        memoryInjectedThisSession = true
+                    }
+                    out += ApiMessage(role = "user", content = content)
+                }
+                Role.ASSISTANT -> {
+                    val text = msg.blocks.filterIsInstance<Block.Text>().joinToString("\n") { it.content }
+                    val calls = msg.blocks.filterIsInstance<Block.ToolCall>()
+                    if (text.isNotBlank() || calls.isNotEmpty()) {
+                        out += ApiMessage(
+                            role = "assistant",
+                            content = text,
+                            toolCalls = calls.map {
+                                ApiToolCall(
+                                    id = it.id,
+                                    name = it.name,
+                                    paramsJson = it.params
+                                )
+                            }
+                        )
+                        for (call in calls) {
+                            if (call.result != null) {
+                                out += ApiMessage(
+                                    role = "tool",
+                                    content = call.result,
+                                    toolCallId = call.id,
+                                    name = call.name
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    fun refreshMemories() {
+        memories = MemoryStore.load()
+    }
+
+    fun addMemory(content: String, importance: String) {
+        val c = content.trim()
+        if (c.isBlank()) return
+        MemoryStore.save(
+            MemoryEntry(
+                id = UUID.randomUUID().toString(),
+                content = c,
+                importance = importance,
+                source = "manual",
+                createdAt = System.currentTimeMillis()
+            )
+        )
+        refreshMemories()
+    }
+
+    fun editMemory(id: String, content: String, importance: String) {
+        val existing = MemoryStore.load().firstOrNull { it.id == id } ?: return
+        if (content.isBlank()) return
+        MemoryStore.save(existing.copy(content = content.trim(), importance = importance))
+        refreshMemories()
+    }
+
+    fun deleteMemory(id: String) {
+        MemoryStore.delete(id)
+        refreshMemories()
+    }
+
+    fun clearMemories() {
+        MemoryStore.deleteAll()
+        refreshMemories()
+    }
+
+    private class ApprovalGate {
+        private var continuation: CancellableContinuation<Boolean>? = null
+
+        suspend fun await(): Boolean = suspendCancellableCoroutine { cont ->
+            continuation = cont
+        }
+
+        fun resolve(approved: Boolean) {
+            continuation?.resume(approved)
+            continuation = null
         }
     }
 }
