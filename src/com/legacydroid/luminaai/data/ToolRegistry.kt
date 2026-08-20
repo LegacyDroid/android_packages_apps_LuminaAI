@@ -159,6 +159,42 @@ object ToolRegistry {
         },
 
         ToolSpec(
+            name = "search_apps",
+            label = "Search apps",
+            icon = "🔎",
+            description = "Search installed apps by name or package. Returns up to 5 matching apps with their exact labels and package names. Call this first when you are unsure of the exact app name, then use the returned package name with other app tools.",
+            parameters = schema(
+                mapOf("query" to JSONObject().put("type", "string").put("description", "App label, keyword or package name")),
+                listOf("query")
+            ),
+            risk = ToolRisk.AUTO
+        ) { args ->
+            val q = args.optString("query").trim()
+            val pm = ctx.packageManager
+            val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val apps = pm.queryIntentActivities(launchIntent, 0)
+            val matches = if (q.isBlank()) {
+                apps.take(10)
+            } else {
+                val nq = normalizeAppName(q)
+                apps.filter {
+                    val label = normalizeAppName(loadLabel(it.activityInfo.packageName))
+                    val pkg = normalizeAppName(it.activityInfo.packageName)
+                    label.contains(nq) || pkg.contains(nq)
+                }.take(5)
+            }
+            val arr = JSONArray()
+            matches.forEach {
+                arr.put(
+                    JSONObject()
+                        .put("name", loadLabel(it.activityInfo.packageName))
+                        .put("package", it.activityInfo.packageName)
+                )
+            }
+            wrapSuccess(JSONObject().put("results", arr))
+        },
+
+        ToolSpec(
             name = "open_app",
             label = "Open an app",
             icon = "🚀",
@@ -171,7 +207,7 @@ object ToolRegistry {
         ) { args ->
             val query = args.optString("app").trim()
             val resolved = resolveApp(query)
-                ?: return@ToolSpec wrapFail("App '$query' was not found")
+                ?: return@ToolSpec wrapFail("App '$query' was not found. Use search_apps to list apps matching that name")
             val launch = ctx.packageManager.getLaunchIntentForPackage(resolved.first)
                 ?: return@ToolSpec wrapFail("App '${resolved.second}' has no launcher activity")
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -389,7 +425,7 @@ object ToolRegistry {
             risk = ToolRisk.CONFIRM
         ) { args ->
             val resolved = resolveApp(args.optString("app"))
-                ?: return@ToolSpec wrapFail("App '${args.optString("app")}' was not found")
+                ?: return@ToolSpec wrapFail("App '${args.optString("app")}' was not found. Use search_apps to list apps matching that name")
             val permName = PERMISSIONS[args.optString("permission").lowercase()]
                 ?: return@ToolSpec wrapFail("Unknown permission '${args.optString("permission")}'")
             val pm = ctx.packageManager
@@ -510,21 +546,37 @@ object ToolRegistry {
 
     fun resolveApp(query: String): Pair<String, String>? {
         val pm = ctx.packageManager
-        val q = query.trim()
+        val nq = normalizeAppName(query)
         val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = pm.queryIntentActivities(launchIntent, 0)
-        val direct = apps.firstOrNull { it.activityInfo.packageName.equals(q, ignoreCase = true) }
+        val direct = apps.firstOrNull {
+            normalizeAppName(it.activityInfo.packageName) == nq
+        }
         if (direct != null) {
             return direct.activityInfo.packageName to
                 loadLabel(direct.activityInfo.packageName)
         }
         val byLabel = apps.firstOrNull {
-            loadLabel(it.activityInfo.packageName).contains(q, ignoreCase = true)
+            normalizeAppName(loadLabel(it.activityInfo.packageName)).contains(nq)
         }
         if (byLabel != null) {
             return byLabel.activityInfo.packageName to loadLabel(byLabel.activityInfo.packageName)
         }
+        val byKeyword = apps.firstOrNull {
+            val label = normalizeAppName(loadLabel(it.activityInfo.packageName))
+            label.isNotEmpty() && nq.isNotEmpty() && label.split(' ', '-', '_').any { it == nq }
+        }
+        if (byKeyword != null) {
+            return byKeyword.activityInfo.packageName to loadLabel(byKeyword.activityInfo.packageName)
+        }
         return null
+    }
+
+    private fun normalizeAppName(s: String): String {
+        var out = s.trim().lowercase()
+        out = out.replace(Regex("\\s+app(s|lication)?$"), "")
+        out = out.replace(Regex("[^a-z0-9]+"), " ")
+        return out.trim()
     }
 
     private fun loadLabel(pkg: String): String {
