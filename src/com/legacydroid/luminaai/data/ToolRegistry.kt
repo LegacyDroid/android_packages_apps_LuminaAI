@@ -40,7 +40,7 @@ object ToolRegistry {
         ToolSpec(
             name = "get_battery",
             label = "Battery status",
-            icon = "🔋",
+            icon = "",
             description = "Read the device battery level, charging status, plugged state and temperature. Returns current live values only.",
             parameters = schema(emptyMap(), emptyList()),
             risk = ToolRisk.AUTO
@@ -51,7 +51,7 @@ object ToolRegistry {
         ToolSpec(
             name = "get_telemetry",
             label = "System telemetry",
-            icon = "📊",
+            icon = "",
             description = "Read live device telemetry: battery, CPU load, RAM usage, storage usage, top recent apps and device model. Only returns real measured values.",
             parameters = schema(emptyMap(), emptyList()),
             risk = ToolRisk.AUTO
@@ -70,7 +70,7 @@ object ToolRegistry {
         ToolSpec(
             name = "toggle_wifi",
             label = "Toggle Wi-Fi",
-            icon = "📶",
+            icon = "",
             description = "Turn the device Wi-Fi on or off. Parameter enabled: boolean, true to enable, false to disable.",
             parameters = schema(
                 mapOf("enabled" to JSONObject().put("type", "boolean").put("description", "true to enable Wi-Fi, false to disable")),
@@ -91,7 +91,7 @@ object ToolRegistry {
         ToolSpec(
             name = "set_brightness",
             label = "Set screen brightness",
-            icon = "🔆",
+            icon = "",
             description = "Set the screen brightness. Parameter level: integer 0-100 percent.",
             parameters = schema(
                 mapOf("level" to JSONObject().put("type", "integer").put("description", "Brightness 0-100").put("minimum", 0).put("maximum", 100)),
@@ -110,7 +110,7 @@ object ToolRegistry {
         ToolSpec(
             name = "set_volume",
             label = "Set volume",
-            icon = "🔊",
+            icon = "",
             description = "Set the volume of a stream. Parameter stream: music, ring, alarm, notification, system or voice_call. Parameter level: integer 0-100.",
             parameters = schema(
                 mapOf(
@@ -143,7 +143,7 @@ object ToolRegistry {
         ToolSpec(
             name = "toggle_flashlight",
             label = "Toggle flashlight",
-            icon = "🔦",
+            icon = "",
             description = "Turn the camera flashlight (torch) on or off. Parameter enabled: boolean.",
             parameters = schema(
                 mapOf("enabled" to JSONObject().put("type", "boolean").put("description", "true to turn the torch on")),
@@ -161,7 +161,7 @@ object ToolRegistry {
         ToolSpec(
             name = "search_apps",
             label = "Search apps",
-            icon = "🔎",
+            icon = "",
             description = "Search installed apps by name or package. Returns up to 5 matching apps with their exact labels and package names. Call this first when you are unsure of the exact app name, then use the returned package name with other app tools.",
             parameters = schema(
                 mapOf("query" to JSONObject().put("type", "string").put("description", "App label, keyword or package name")),
@@ -197,7 +197,7 @@ object ToolRegistry {
         ToolSpec(
             name = "open_app",
             label = "Open an app",
-            icon = "🚀",
+            icon = "",
             description = "Open an installed app by its name or package. Parameter app: the app name (e.g. 'Settings') or package name.",
             parameters = schema(
                 mapOf("app" to JSONObject().put("type", "string").put("description", "App label or package name")),
@@ -222,7 +222,7 @@ object ToolRegistry {
         ToolSpec(
             name = "set_power_profile",
             label = "Set power profile",
-            icon = "⚡",
+            icon = "",
             description = "Apply a safe power profile. Parameter profile: 'powersave' (battery saver + 60Hz), 'balanced' (default), or 'performance' (no caps, up to max refresh rate).",
             parameters = schema(
                 mapOf("profile" to JSONObject().put("type", "string").put("description", "powersave, balanced or performance")),
@@ -255,7 +255,7 @@ object ToolRegistry {
         ToolSpec(
             name = "set_clipboard",
             label = "Copy to clipboard",
-            icon = "📋",
+            icon = "",
             description = "Copy the given text to the device clipboard.",
             parameters = schema(
                 mapOf("text" to JSONObject().put("type", "string").put("description", "Text to copy")),
@@ -270,7 +270,7 @@ object ToolRegistry {
         ToolSpec(
             name = "get_recent_notifications",
             label = "Recent notifications",
-            icon = "🔔",
+            icon = "",
             description = "List the most recent notifications still present on the device (app, title, text, time). Useful to summarize or triage. Limit: integer, default 10.",
             parameters = schema(
                 mapOf("limit" to JSONObject().put("type", "integer").put("description", "Max notifications to return").put("minimum", 1).put("maximum", 50)),
@@ -284,7 +284,7 @@ object ToolRegistry {
         ToolSpec(
             name = "extract_otp",
             label = "Extract OTP code",
-            icon = "🔐",
+            icon = "",
             description = "Scan recent notifications for a one-time password / verification code (4-8 digits). If found, copies it to the clipboard and dismisses the notification. Returns the code and source app.",
             parameters = schema(emptyMap(), emptyList()),
             risk = ToolRisk.AUTO
@@ -295,7 +295,7 @@ object ToolRegistry {
         ToolSpec(
             name = "remember_memory",
             label = "Save memory",
-            icon = "🧠",
+            icon = "",
             description = "Permanently store a fact the user wants remembered across sessions. Use when the user states a preference, fact or request to remember. Parameter content: the fact. Parameter importance: high, normal or low.",
             parameters = schema(
                 mapOf(
@@ -328,7 +328,7 @@ object ToolRegistry {
         ToolSpec(
             name = "search_memories",
             label = "Search memories",
-            icon = "🔍",
+            icon = "",
             description = "Search stored long-term memories about the user. Parameter query: keywords to match.",
             parameters = schema(
                 mapOf("query" to JSONObject().put("type", "string").put("description", "Keywords to search")),
@@ -354,7 +354,7 @@ object ToolRegistry {
         ToolSpec(
             name = "forget_memory",
             label = "Forget memory",
-            icon = "🗑️",
+            icon = "",
             description = "Delete a stored memory by its id, or by matching part of its content.",
             parameters = schema(
                 mapOf(
@@ -385,7 +385,7 @@ object ToolRegistry {
         ToolSpec(
             name = "search_local",
             label = "Search device",
-            icon = "🗂️",
+            icon = "",
             description = "Search local device data (SMS messages and call history) for the given keywords. Returns matching entries with sender, date and content. Privacy-sensitive: the user confirms this call.",
             parameters = schema(
                 mapOf(
@@ -402,7 +402,7 @@ object ToolRegistry {
         ToolSpec(
             name = "audit_privacy",
             label = "Privacy audit",
-            icon = "🛡️",
+            icon = "",
             description = "Audit background permission usage (camera, location, microphone, contacts, SMS) over the last 24 hours. Returns apps that accessed sensitive permissions many times while in the background (threshold 15).",
             parameters = schema(emptyMap(), emptyList()),
             risk = ToolRisk.AUTO
@@ -413,7 +413,7 @@ object ToolRegistry {
         ToolSpec(
             name = "revoke_permission",
             label = "Revoke permission",
-            icon = "🔒",
+            icon = "",
             description = "Revoke a runtime permission from an app. Parameter app: app label or package. Parameter permission: camera, location, microphone, contacts, sms or phone.",
             parameters = schema(
                 mapOf(
@@ -441,7 +441,7 @@ object ToolRegistry {
         ToolSpec(
             name = "run_shell",
             label = "Run shell command",
-            icon = "💻",
+            icon = "",
             description = "Run a shell command on the device. LOCKED: only available when Unsafe Developer Mode is enabled in Settings, and always requires your approval.",
             parameters = schema(
                 mapOf("command" to JSONObject().put("type", "string").put("description", "Shell command to run")),

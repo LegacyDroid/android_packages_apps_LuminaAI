@@ -171,14 +171,14 @@ fun LuminaChatOverlay(
 
     val suggestions = remember {
         listOf(
-            SuggestionItem(emoji = "📶", title = "Toggle Wi-Fi", query = "Turn off my Wi-Fi"),
-            SuggestionItem(emoji = "🔋", title = "Battery status", query = "How is my battery doing?"),
-            SuggestionItem(emoji = "📝", title = "Summarize notifications", query = "Summarize my recent notifications"),
-            SuggestionItem(emoji = "⚡", title = "System status", query = "Check my system status"),
-            SuggestionItem(emoji = "🧠", title = "What do you remember?", query = "What do you remember about me?"),
-            SuggestionItem(emoji = "🛡️", title = "Privacy audit", query = "Run a privacy audit"),
-            SuggestionItem(emoji = "💡", title = "Creative thought", query = "Give me an inspiring thought"),
-            SuggestionItem(emoji = "✨", title = "Tell a joke", query = "Tell me a joke")
+            SuggestionItem(emoji = "", title = "Toggle Wi-Fi", query = "Turn off my Wi-Fi"),
+            SuggestionItem(emoji = "", title = "Battery status", query = "How is my battery doing?"),
+            SuggestionItem(emoji = "", title = "Summarize notifications", query = "Summarize my recent notifications"),
+            SuggestionItem(emoji = "", title = "System status", query = "Check my system status"),
+            SuggestionItem(emoji = "", title = "What do you remember?", query = "What do you remember about me?"),
+            SuggestionItem(emoji = "", title = "Privacy audit", query = "Run a privacy audit"),
+            SuggestionItem(emoji = "", title = "Creative thought", query = "Give me an inspiring thought"),
+            SuggestionItem(emoji = "", title = "Tell a joke", query = "Tell me a joke")
         )
     }
 
@@ -788,7 +788,7 @@ private fun MemoryEventChip(block: Block.MemoryEvent) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text("🧠", fontSize = 11.sp)
+        Text("", fontSize = 11.sp)
         Text(
             text = when (block.action) {
                 "saved" -> "Saved to memory: ${block.content}"
