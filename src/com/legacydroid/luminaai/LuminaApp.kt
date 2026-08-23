@@ -33,6 +33,19 @@ class LuminaApp : Application() {
         NotificationHub.grantListenerAccess(this)
         LocalSearchIndex.init(this)
         grantUsageStatsAccess()
+        scheduleListenerRecheck()
+    }
+
+    // A raw secure-settings write with an unchanged value produces no change
+    // notification, so NotificationManagerService may skip adoption. Re-run the
+    // grant once the permission state has settled; if access is already live
+    // this is a no-op.
+    private fun scheduleListenerRecheck() {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (!NotificationHub.enabled) {
+                NotificationHub.grantListenerAccess(this)
+            }
+        }, 20_000L)
     }
 
     private fun grantRuntimePermissions() {

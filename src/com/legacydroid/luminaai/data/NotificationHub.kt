@@ -49,7 +49,7 @@ object NotificationHub {
     private lateinit var context: Context
 
     @Volatile
-    private var lastAutoKey: String? = null
+    private var lastAutoOtp: String? = null
 
     @Volatile
     private var lastAutoTime: Long = 0L
@@ -71,8 +71,9 @@ object NotificationHub {
         if (grantedDirectly) return
 
         // Fallback: write enabled_notification_listeners directly; the app holds
-        // WRITE_SECURE_SETTINGS. NotificationManagerService rebinding on this
-        // setting change is what actually connects the listener.
+        // WRITE_SECURE_SETTINGS. Note NotificationManagerService may not adopt a
+        // raw write whose value is unchanged, so callers re-run this grant later;
+        // once ACCESS_NOTIFICATIONS is effective the primary path binds instantly.
         runCatching {
             val flat = cn.flattenToString()
             val current = Settings.Secure.getString(
@@ -88,7 +89,7 @@ object NotificationHub {
                 )
                 Log.i(TAG, "Notification listener access granted via secure settings")
             } else {
-                Log.i(TAG, "Listener listed in secure settings, waiting for system bind")
+                Log.i(TAG, "Listener already in secure settings; awaiting system bind")
             }
         }.onFailure { Log.w(TAG, "Secure-settings listener grant failed", it) }
     }
@@ -181,11 +182,11 @@ object NotificationHub {
         ) == 1
         if (!enabled) return
         val now = System.currentTimeMillis()
-        if (key == lastAutoKey && now - lastAutoTime < 30_000) return
         val hay = "$title $text"
         if (!OTP_KEYWORDS_REGEX.containsMatchIn(hay)) return
         val otp = findOtp(title, text) ?: return
-        lastAutoKey = key
+        if (otp == lastAutoOtp && now - lastAutoTime < 60_000) return
+        lastAutoOtp = otp
         lastAutoTime = now
         ClipboardTools.copy(context, otp, sensitive = true)
         cancelNotification(key)
