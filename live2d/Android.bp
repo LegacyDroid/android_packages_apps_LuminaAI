@@ -122,6 +122,8 @@ cc_library_static {
         "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src",
         "vendor/cubism/CubismSdkForNative-5-r.5/Core/include",
     ],
+    // jni.h lives here in this tree (NDK sysroot subset lacks it).
+    include_dirs: ["libnativehelper/include_jni"],
     export_static_lib_headers: ["lumina_live2d_cubismcore"],
 
     static_libs: ["lumina_live2d_cubismcore"],
@@ -160,6 +162,8 @@ cc_library_shared {
         "cpp",
         "vendor/cubism/CubismSdkForNative-5-r.5/Samples/OpenGL/thirdParty/stb",
     ],
+
+    include_dirs: ["libnativehelper/include_jni"],
 
     static_libs: ["lumina_live2d_cubismframework"],
 
