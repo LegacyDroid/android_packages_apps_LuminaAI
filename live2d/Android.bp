@@ -1,0 +1,191 @@
+//
+// SPDX-FileCopyrightText: 2026 The LegacyDroid Project
+// SPDX-License-Identifier: Apache-2.0
+//
+// Live2D avatar rendering for LuminaAI.
+//
+// Three modules:
+//   lumina_live2d_cubismcore     - prebuilt Cubism Core (per-ABI static)
+//   lumina_live2d_cubismframework - Cubism Framework compiled from source
+//   libluminalive2d               - our JNI engine shared library
+//
+// Everything under live2d/vendor/ is git-ignored and staged locally by
+// running live2d/get_vendor.sh once (see LICENSE-NOTES.md for why the Core
+// binaries and the model are not committed).
+//
+// The modules are built against the NDK toolchain (sdk_version) because the
+// Core static libraries were produced with the NDK; linking them into a
+// platform-toolchain module would mix sysroots. The engine only uses stable
+// NDK APIs (GLES2, android/log, JNI), so this is lossless for a platform app.
+//
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_prebuilt_library_static {
+    name: "lumina_live2d_cubismcore",
+    vendor_available: false,
+
+    arch: {
+        arm: {
+            // The Core SDK ships no 32-bit ARM prebuilt.
+            enabled: false,
+        },
+        arm64: {
+            srcs: ["vendor/cubism/CubismSdkForNative-5-r.5/Core/lib/android/arm64-v8a/libLive2DCubismCore.a"],
+        },
+        x86: {
+            srcs: ["vendor/cubism/CubismSdkForNative-5-r.5/Core/lib/android/x86/libLive2DCubismCore.a"],
+        },
+        x86_64: {
+            srcs: ["vendor/cubism/CubismSdkForNative-5-r.5/Core/lib/android/x86_64/libLive2DCubismCore.a"],
+        },
+    },
+
+    export_include_dirs: [
+        "vendor/cubism/CubismSdkForNative-5-r.5/Core/include",
+    ],
+
+    // Vendored binary: keep as-is.
+    cflags: ["-w"],
+
+    sdk_version: "24",
+}
+
+cc_library_static {
+    name: "lumina_live2d_cubismframework",
+
+    srcs: [
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/CubismCdiJson.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/CubismDefaultParameterId.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/CubismFramework.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/CubismModelSettingJson.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Effect/CubismBreath.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Effect/CubismEyeBlink.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Effect/CubismLook.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Effect/CubismPose.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Id/CubismId.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Id/CubismIdManager.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Math/CubismMath.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Math/CubismMatrix44.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Math/CubismModelMatrix.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Math/CubismTargetPoint.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Math/CubismVector2.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Math/CubismViewMatrix.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Model/CubismMoc.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Model/CubismModel.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Model/CubismModelMultiplyAndScreenColor.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Model/CubismModelUserData.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Model/CubismModelUserDataJson.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Model/CubismUserModel.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/ACubismMotion.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismExpressionMotion.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismExpressionMotionManager.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismMotion.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismMotionJson.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismMotionManager.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismMotionQueueEntry.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismMotionQueueManager.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismUpdateScheduler.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismBreathUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismExpressionUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismEyeBlinkUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismLipSyncUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismLookUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismPhysicsUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/CubismPoseUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/ICubismUpdater.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Motion/IParameterProvider.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Physics/CubismPhysics.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Physics/CubismPhysicsJson.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/csmBlendMode.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/CubismRenderer.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/OpenGL/CubismOffscreenManager_OpenGLES2.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/OpenGL/CubismOffscreenRenderTarget_OpenGLES2.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/OpenGL/CubismRenderer_OpenGLES2.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/OpenGL/CubismRenderTarget_OpenGLES2.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/OpenGL/CubismShader_OpenGLES2.cpp",
+    ],
+
+    local_include_dirs: [
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Core/include",
+    ],
+    export_include_dirs: [
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Core/include",
+    ],
+    export_static_lib_headers: ["lumina_live2d_cubismcore"],
+
+    static_libs: ["lumina_live2d_cubismcore"],
+
+    cflags: [
+        "-DCSM_TARGET_ANDROID_ES2",
+        // Vendored upstream code: silence warnings instead of patching it.
+        "-w",
+    ],
+
+    arch: {
+        arm: {
+            enabled: false,
+        },
+    },
+
+    sdk_version: "24",
+    stl: "c++_static",
+}
+
+cc_library_shared {
+    name: "libluminalive2d",
+
+    srcs: [
+        "cpp/Live2DEngine.cpp",
+        "cpp/SampleModel.cpp",
+        "cpp/JniBridgeC.cpp",
+        "cpp/LAppAllocator.cpp",
+        "cpp/LAppPal.cpp",
+        "cpp/LAppDefine.cpp",
+        "cpp/LAppTextureManager.cpp",
+    ],
+
+    local_include_dirs: [
+        "cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Samples/OpenGL/thirdParty/stb",
+    ],
+
+    static_libs: ["lumina_live2d_cubismframework"],
+
+    shared_libs: [
+        "liblog",
+        "libandroid",
+        "libGLESv2",
+    ],
+
+    ldflags: [
+        // 16 KB page alignment for newer devices.
+        "-Wl,-z,max-page-size=16384",
+    ],
+
+    cflags: [
+        "-DCSM_TARGET_ANDROID_ES2",
+        "-std=c++14",
+    ],
+
+    arch: {
+        arm: {
+            enabled: false,
+        },
+    },
+
+    sdk_version: "24",
+    stl: "c++_static",
+}

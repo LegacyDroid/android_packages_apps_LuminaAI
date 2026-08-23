@@ -1,0 +1,154 @@
+/*
+ * SPDX-FileCopyrightText: 2026 The LegacyDroid Project
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package com.legacydroid.luminaai.live2d
+
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+/**
+ * High-level facade over the native Live2D engine for the assistant tools
+ * and the overlay UI. All engine access goes through here so the tools stay
+ * simple and the model lifecycle has one owner.
+ *
+ * Expression/motion names are matched against friendly English aliases; the
+ * raw model names are Chinese (the author's language), e.g.:
+ *   生气 = angry, 猫耳 = cat ears, 爱心眼 = heart eyes ...
+ */
+object Live2DController {
+
+    /** Native lib loaded and the model asset is staged in the APK. */
+    var available by mutableStateOf(false)
+        private set
+
+    /** True once the GL thread finished loading the model. */
+    var loaded by mutableStateOf(false)
+        private set
+
+    private var initialized = false
+
+    /**
+     * Friendly alias -> model expression file name (without .exp3.json).
+     * The Chinese names come from the model author's button mapping.
+     */
+    val EXPRESSION_ALIASES: Map<String, String> = mapOf(
+        "surprised" to "惊讶",
+        "shocked" to "惊讶",
+        "angry" to "生气",
+        "mad" to "生气",
+        "confused" to "疑惑",
+        "question" to "疑惑",
+        "crying" to "流泪",
+        "tears" to "流泪",
+        "sad" to "流泪",
+        "despair" to "脸黑",
+        "deadpan" to "脸黑",
+        "eyeroll" to "白眼",
+        "sarcastic" to "白眼",
+        "stareyes" to "星星眼",
+        "amazed" to "星星眼",
+        "excited" to "星星眼",
+        "hearteyes" to "爱心眼",
+        "love" to "爱心眼",
+        "moneyeyes" to "金钱眼",
+        "greedy" to "金钱眼",
+        "blush" to "脸红",
+        "smirk_left" to "←歪嘴",
+        "smirk_right" to "歪嘴→",
+        "smug" to "歪嘴→",
+        "tongue" to "舌头",
+        "cheeky" to "舌头",
+        "catears" to "猫耳",
+        "cat_mode" to "猫耳",
+        "crown" to "王冠",
+        "boss_mode" to "王冠",
+        "wings" to "翅膀",
+        "hair_down" to "披发",
+        "ponytail" to "马尾",
+        "streamer_desk" to "直播套装",
+        "gamepad" to "手柄"
+    )
+
+    val MOTION_ALIASES: Map<String, String> = mapOf(
+        "idle" to "DaiJi",     // 待机 standby
+        "standby" to "DaiJi",
+        "wave" to "HuiShou",   // 挥手 wave
+        "wink" to "MeiYan"     // 媚眼 flirty wink
+    )
+
+    fun init(context: Context) {
+        if (initialized) return
+        initialized = true
+        val bridgeReady = runCatching {
+            Live2DBridge.initialize(context.applicationContext)
+            true
+        }.getOrDefault(false)
+        val modelStaged = runCatching {
+            context.assets.list("")?.contains("IceGirl.model3.json") == true
+        }.getOrDefault(false)
+        available = bridgeReady && modelStaged
+        if (!available) {
+            android.util.Log.w(
+                "LuminaLive2D",
+                "Avatar unavailable (lib=$bridgeReady, modelStaged=$modelStaged). " +
+                    "Run live2d/get_vendor.sh to stage it."
+            )
+        }
+    }
+
+    /** Called by the render view once the GL thread finished loading. */
+    internal fun markLoaded() {
+        loaded = true
+    }
+
+    internal fun markUnloaded() {
+        loaded = false
+    }
+
+    fun expressionNames(): List<String> {
+        if (!loaded) return emptyList()
+        return runCatching {
+            (0 until Live2DBridge.nativeGetExpressionCount())
+                .mapNotNull { Live2DBridge.nativeGetExpressionName(it) }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Sets an expression by friendly alias or raw model name. */
+    fun setExpression(name: String): Boolean {
+        if (!loaded) return false
+        val target = EXPRESSION_ALIASES[name.lowercase().replace(" ", "").replace("_", "")] ?: name
+        val names = expressionNames()
+        val index = names.indexOfFirst { it.equals(target, ignoreCase = true) }
+        if (index < 0) return false
+        runCatching { Live2DBridge.nativeSetExpression(index) }
+        return true
+    }
+
+    fun clearExpressions() {
+        if (!loaded) return
+        runCatching { Live2DBridge.nativeClearExpressions() }
+    }
+
+    fun motionGroups(): List<String> {
+        if (!loaded) return emptyList()
+        return runCatching {
+            (0 until Live2DBridge.nativeGetMotionGroupCount())
+                .mapNotNull { Live2DBridge.nativeGetMotionGroupName(it) }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Plays a motion by friendly alias or raw group name. */
+    fun playMotion(name: String): Boolean {
+        if (!loaded) return false
+        val target = MOTION_ALIASES[name.lowercase().replace(" ", "")] ?: name
+        val groups = motionGroups()
+        val index = groups.indexOfFirst { it.equals(target, ignoreCase = true) }
+        if (index < 0) return false
+        runCatching { Live2DBridge.nativePlayMotionGroup(index) }
+        return true
+    }
+}

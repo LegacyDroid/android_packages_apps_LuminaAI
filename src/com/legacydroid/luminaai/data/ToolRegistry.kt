@@ -14,6 +14,7 @@ import android.net.wifi.WifiManager
 import android.os.Process
 import android.provider.Settings
 import com.legacydroid.luminaai.model.ToolRisk
+import com.legacydroid.luminaai.live2d.Live2DController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -289,6 +290,89 @@ object ToolRegistry {
                     .put("copied", true)
                     .put("length", text.length)
             )
+        },
+
+        ToolSpec(
+            name = "live2d_list_expressions",
+            label = "List avatar expressions",
+            icon = "",
+            description = "List the available expressions for your Live2D avatar with friendly names. Use when unsure which expression name fits a mood.",
+            parameters = schema(emptyMap(), emptyList()),
+            risk = ToolRisk.AUTO
+        ) { _ ->
+            if (!Live2DController.available) {
+                return@ToolSpec wrapFail("Live2D avatar is not installed on this build")
+            }
+            val arr = JSONArray()
+            Live2DController.EXPRESSION_ALIASES.forEach { (alias, raw) ->
+                arr.put(JSONObject().put("name", alias).put("model_expression", raw))
+            }
+            wrapSuccess(
+                JSONObject()
+                    .put("expressions", arr)
+                    .put("loaded", Live2DController.loaded)
+            )
+        },
+
+        ToolSpec(
+            name = "live2d_set_expression",
+            label = "Set avatar expression",
+            icon = "",
+            description = "Show an emotion on your Live2D avatar face. Parameter expression: surprised, angry, confused, crying, despair, eyeroll, stareyes, hearteyes, moneyeyes, blush, smirk_left, smirk_right, tongue, catears, crown, wings, hair_down, ponytail, streamer_desk or gamepad. Expressions stack (Add-blend); call live2d_clear_expressions when the mood passes.",
+            parameters = schema(
+                mapOf("expression" to JSONObject().put("type", "string").put("description", "Expression alias, e.g. hearteyes")),
+                listOf("expression")
+            ),
+            risk = ToolRisk.AUTO
+        ) { args ->
+            if (!Live2DController.available) {
+                return@ToolSpec wrapFail("Live2D avatar is not installed on this build")
+            }
+            val name = args.optString("expression").trim()
+            if (name.isBlank()) return@ToolSpec wrapFail("Provide an expression name")
+            if (Live2DController.setExpression(name)) {
+                wrapSuccess(JSONObject().put("expression", name))
+            } else {
+                wrapFail("Unknown expression '$name'. Use live2d_list_expressions for valid names")
+            }
+        },
+
+        ToolSpec(
+            name = "live2d_clear_expressions",
+            label = "Clear avatar expressions",
+            icon = "",
+            description = "Reset all stacked avatar expressions back to the neutral face.",
+            parameters = schema(emptyMap(), emptyList()),
+            risk = ToolRisk.AUTO
+        ) { _ ->
+            if (!Live2DController.available) {
+                return@ToolSpec wrapFail("Live2D avatar is not installed on this build")
+            }
+            Live2DController.clearExpressions()
+            wrapSuccess(JSONObject().put("cleared", true))
+        },
+
+        ToolSpec(
+            name = "live2d_play_motion",
+            label = "Play avatar motion",
+            icon = "",
+            description = "Make your Live2D avatar perform a motion animation. Parameter motion: idle (standby), wave (greeting wave) or wink (flirty wink).",
+            parameters = schema(
+                mapOf("motion" to JSONObject().put("type", "string").put("description", "idle, wave or wink")),
+                listOf("motion")
+            ),
+            risk = ToolRisk.AUTO
+        ) { args ->
+            if (!Live2DController.available) {
+                return@ToolSpec wrapFail("Live2D avatar is not installed on this build")
+            }
+            val motion = args.optString("motion").trim()
+            if (motion.isBlank()) return@ToolSpec wrapFail("Provide a motion name")
+            if (Live2DController.playMotion(motion)) {
+                wrapSuccess(JSONObject().put("motion", motion))
+            } else {
+                wrapFail("Unknown motion '$motion'. Valid: idle, wave, wink")
+            }
         },
 
         ToolSpec(
@@ -573,6 +657,15 @@ object ToolRegistry {
             if (t.risk == ToolRisk.LOCKED && !isDevMode()) continue
             sb.append("- ${t.name}: ${t.description}\n")
         }
+        sb.append(
+            "Your Live2D avatar mirrors your mood on screen. React naturally with " +
+                "live2d_set_expression as you reply - hearteyes/blush when grateful or flattered, " +
+                "stareyes when excited, surprised or despair on errors and shocks, confused when " +
+                "asking back, smirk_right/tongue/eyeroll for sass, angry when playfully offended, " +
+                "catears or crown for special modes, moneyeyes for battery/storage/money topics. " +
+                "Stack at most two expressions, then live2d_clear_expressions when the moment " +
+                "passes. Greet with live2d_play_motion wave.\n"
+        )
         return sb.toString()
     }
 

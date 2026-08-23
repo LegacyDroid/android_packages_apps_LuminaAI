@@ -100,6 +100,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.legacydroid.luminaai.data.HistorySession
 import com.legacydroid.luminaai.data.MemoryEntry
+import com.legacydroid.luminaai.live2d.Live2DController
+import com.legacydroid.luminaai.live2d.LuminaAvatar
 import com.legacydroid.luminaai.model.Block
 import com.legacydroid.luminaai.model.ChatMessage
 import com.legacydroid.luminaai.model.Role
@@ -202,6 +204,48 @@ fun LuminaChatOverlay(
         val totalHeight = maxHeight
         val orbTopOffset = totalHeight * 0.32f
 
+        val conversationActive = messages.isNotEmpty()
+        val heroCollapse by animateFloatAsState(
+            targetValue = if (conversationActive) 0f else 1f,
+            animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+            label = "heroCollapse"
+        )
+        val messagesMaxHeight by animateDpAsState(
+            targetValue = if (conversationActive) totalHeight * 0.86f else 190.dp,
+            animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+            label = "messagesHeight"
+        )
+
+        // Lumi-chan reveal: the orb/logo stays until the Live2D model finished
+        // loading, then the model fades in underneath the chat and the orb
+        // fades out (design: "logo hide = model appear").
+        val modelReveal by animateFloatAsState(
+            targetValue = if (Live2DController.available && Live2DController.loaded) 1f else 0f,
+            animationSpec = tween(600, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+            label = "modelReveal"
+        )
+        // Idle: large centered framing like the demo. Conversation: shrink to
+        // a top strip so her head peeks above the message list.
+        val avatarHeight by animateDpAsState(
+            targetValue = if (conversationActive) totalHeight * 0.34f else totalHeight * 0.56f,
+            animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+            label = "avatarHeight"
+        )
+        if (Live2DController.available) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 12.dp)
+                    .fillMaxWidth()
+                    .height(avatarHeight)
+                    .graphicsLayer {
+                        alpha = introStage(introProgress.value, 0.45f, 0.85f) * modelReveal
+                    }
+            ) {
+                LuminaAvatar(modifier = Modifier.fillMaxSize())
+            }
+        }
+
         val controlBg = scheme.surfaceVariant.copy(alpha = 0.45f)
         val controlBorder = scheme.outlineVariant.copy(alpha = 0.40f)
 
@@ -288,24 +332,12 @@ fun LuminaChatOverlay(
             )
         }
 
-        val conversationActive = messages.isNotEmpty()
-        val heroCollapse by animateFloatAsState(
-            targetValue = if (conversationActive) 0f else 1f,
-            animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
-            label = "heroCollapse"
-        )
-        val messagesMaxHeight by animateDpAsState(
-            targetValue = if (conversationActive) totalHeight * 0.86f else 190.dp,
-            animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
-            label = "messagesHeight"
-        )
-
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .offset(y = orbTopOffset)
                 .graphicsLayer {
-                    val t = introStage(introProgress.value, 0f, 0.55f) * heroCollapse
+                    val t = introStage(introProgress.value, 0f, 0.55f) * heroCollapse * (1f - modelReveal)
                     alpha = t
                     scaleX = 0.5f + t * 0.5f
                     scaleY = 0.5f + t * 0.5f
@@ -330,7 +362,7 @@ fun LuminaChatOverlay(
                 .align(Alignment.TopCenter)
                 .offset(y = orbTopOffset + 186.dp)
                 .graphicsLayer {
-                    alpha = introStage(introProgress.value, 0.35f, 0.7f) * heroCollapse
+                    alpha = introStage(introProgress.value, 0.35f, 0.7f) * heroCollapse * (1f - modelReveal)
                     translationY -= (1f - heroCollapse) * 24.dp.toPx()
                 },
             contentAlignment = Alignment.Center

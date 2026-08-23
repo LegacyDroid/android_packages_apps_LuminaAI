@@ -1,0 +1,9 @@
+# Live2D vendor content: Cubism Core binaries are licensed for redistribution
+# only when embedded in the app, and the IceGirl model license forbids
+# redistributing the model data. Both are staged locally by live2d/get_vendor.sh.
+live2d/vendor/
+*.rar
+
+# Local build artifacts
+*.iml
+.idea/

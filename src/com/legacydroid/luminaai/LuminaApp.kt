@@ -12,6 +12,7 @@ import android.os.Process
 import com.legacydroid.luminaai.data.LocalSearchIndex
 import com.legacydroid.luminaai.data.NotificationHub
 import com.legacydroid.luminaai.data.ToolRegistry
+import com.legacydroid.luminaai.live2d.Live2DController
 
 class LuminaApp : Application() {
 
@@ -32,6 +33,7 @@ class LuminaApp : Application() {
         LuminaSession.init(this)
         NotificationHub.grantListenerAccess(this)
         LocalSearchIndex.init(this)
+        Live2DController.init(this)
         grantUsageStatsAccess()
         scheduleListenerRecheck()
     }
