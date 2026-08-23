@@ -103,6 +103,13 @@ cc_library_static {
         "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Physics/CubismPhysics.cpp",
         "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Physics/CubismPhysicsJson.cpp",
 
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Type/csmRectF.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Type/csmString.cpp",
+
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Utils/CubismDebug.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Utils/CubismJson.cpp",
+        "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Utils/CubismString.cpp",
+
         "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/csmBlendMode.cpp",
         "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src/Rendering/CubismRenderer.cpp",
 
@@ -169,7 +176,10 @@ cc_library_shared {
 
     header_libs: ["jni_headers"],
 
-    static_libs: ["lumina_live2d_cubismframework"],
+    static_libs: [
+        "lumina_live2d_cubismframework",
+        "lumina_live2d_cubismcore",
+    ],
 
     shared_libs: [
         "liblog",
