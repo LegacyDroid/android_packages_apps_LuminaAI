@@ -50,6 +50,7 @@ private fun LuminaRootContent() {
     val isThinking = LuminaSession.isThinking
     val pendingApproval = LuminaSession.pendingApproval
     val memories = LuminaSession.memories
+    val engineLabel = LuminaSession.engineLabel
 
     val scheme = MaterialTheme.colorScheme
 
@@ -149,7 +150,10 @@ private fun LuminaRootContent() {
                 isThinking = isThinking,
                 pendingApproval = pendingApproval,
                 memories = memories,
+                engineLabel = engineLabel,
                 onSendMessage = LuminaSession::sendMessage,
+                onCancelGeneration = LuminaSession::cancelGeneration,
+                onRerunLast = LuminaSession::rerunLast,
                 onClose = LuminaSession::dismiss,
                 onClearChat = LuminaSession::clearChat,
                 onApprove = LuminaSession::approvePending,
@@ -158,7 +162,10 @@ private fun LuminaRootContent() {
                 onAddMemory = LuminaSession::addMemory,
                 onEditMemory = LuminaSession::editMemory,
                 onDeleteMemory = LuminaSession::deleteMemory,
-                onClearMemories = LuminaSession::clearMemories
+                onClearMemories = LuminaSession::clearMemories,
+                onLoadHistorySessions = LuminaSession::listHistory,
+                onResumeHistory = LuminaSession::resumeHistory,
+                onDeleteHistorySession = LuminaSession::deleteHistorySession
             )
         }
     }

@@ -31,6 +31,7 @@ object MemoryStore {
 
     private fun prefs() = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    @Synchronized
     fun load(): List<MemoryEntry> {
         val raw = prefs().getString(KEY_MEMORIES, null) ?: return emptyList()
         return runCatching {
@@ -48,21 +49,25 @@ object MemoryStore {
         }.getOrDefault(emptyList())
     }
 
+    @Synchronized
     fun save(entry: MemoryEntry) {
         val list = load().filter { it.id != entry.id }.toMutableList()
-        list.add(0, entry)
+        list.add(0, entry.copy(importance = normalizeImportance(entry.importance)))
         if (list.size > MAX_MEMORIES) list.subList(MAX_MEMORIES, list.size).clear()
         persist(list)
     }
 
+    @Synchronized
     fun delete(id: String) {
         persist(load().filter { it.id != id })
     }
 
+    @Synchronized
     fun deleteAll() {
         persist(emptyList())
     }
 
+    @Synchronized
     fun search(query: String): List<MemoryEntry> {
         val q = query.trim()
         if (q.isEmpty()) return load()
@@ -70,6 +75,14 @@ object MemoryStore {
         return load().filter { e ->
             val hay = e.content.lowercase()
             terms.all { hay.contains(it) }
+        }
+    }
+
+    fun normalizeImportance(value: String): String {
+        return when (value.trim().lowercase()) {
+            "high" -> "high"
+            "low" -> "low"
+            else -> "normal"
         }
     }
 

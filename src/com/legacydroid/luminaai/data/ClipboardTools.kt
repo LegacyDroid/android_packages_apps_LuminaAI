@@ -6,14 +6,29 @@
 package com.legacydroid.luminaai.data
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.PersistableBundle
 
 object ClipboardTools {
 
-    fun copy(context: Context, text: String) {
-        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newPlainText("Lumina", text))
+    /**
+     * Copies text to the clipboard. When sensitive is true the clip is flagged
+     * with EXTRA_IS_SENSITIVE so system UI hides it from clipboard previews.
+     */
+    fun copy(context: Context, text: String, sensitive: Boolean = false): Boolean {
+        if (text.isBlank()) return false
+        return runCatching {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Lumina", text)
+            if (sensitive) {
+                clip.description.extras = PersistableBundle().apply {
+                    putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                }
+            }
+            cm.setPrimaryClip(clip)
+        }.getOrDefault(false)
     }
 
     fun read(context: Context): String {

@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.legacydroid.luminaai.data.HistorySession
+import com.legacydroid.luminaai.data.HistoryStore
 import com.legacydroid.luminaai.data.LumiApi
 import com.legacydroid.luminaai.data.LumiResult
 import com.legacydroid.luminaai.data.MemoryEntry
@@ -36,6 +38,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.resume
+import kotlin.jvm.Volatile
 
 object LuminaSession {
 
@@ -56,6 +59,8 @@ object LuminaSession {
         private set
     var memories by mutableStateOf(MemoryStore.load())
         private set
+    var engineLabel by mutableStateOf("")
+        private set
 
     var onIdle: (() -> Unit)? = null
 
@@ -63,9 +68,24 @@ object LuminaSession {
     private var memoryInjectedThisSession = false
     private var activeGate: ApprovalGate? = null
 
+    @Volatile
+    private var sessionGeneration = 0
+
+    @Volatile
+    private var historySessionId = -1L
+
     fun init(ctx: Context) {
         context = ctx.applicationContext
         refreshMemories()
+        refreshEngineLabel()
+    }
+
+    private fun refreshEngineLabel() {
+        val config = runCatching { LumiApi.readConfig(context) }.getOrNull() ?: return
+        engineLabel = when (config.provider) {
+            "custom" -> config.customModel.ifBlank { config.model }
+            else -> config.model
+        }
     }
 
     fun awaken() {
@@ -74,11 +94,23 @@ object LuminaSession {
             return
         }
         shockwaveToken = System.currentTimeMillis()
+        sessionGeneration++
+        runningJob?.cancel()
+        isThinking = false
+        pendingApproval = null
+        activeGate = null
+        finalizeHistory()
+        messages.clear()
+        memoryInjectedThisSession = false
+        refreshEngineLabel()
+        val gen = sessionGeneration
         scope.launch {
             delay(120)
+            if (sessionGeneration != gen) return@launch
             state = LuminaState.AWAKENED
             if (messages.isEmpty()) {
                 delay(2400)
+                if (sessionGeneration != gen) return@launch
                 if (messages.isEmpty()) {
                     greeting()
                 }
@@ -128,16 +160,48 @@ object LuminaSession {
 
     fun dismiss() {
         if (state != LuminaState.AWAKENED) return
+        val gen = sessionGeneration
+        runningJob?.cancel()
+        isThinking = false
+        pendingApproval = null
+        finalizeHistory()
+        state = LuminaState.CLOSING
         scope.launch {
-            runningJob?.cancel()
-            isThinking = false
-            pendingApproval = null
-            state = LuminaState.CLOSING
             delay(700)
+            if (sessionGeneration != gen) return@launch
             messages.clear()
             memoryInjectedThisSession = false
             state = LuminaState.IDLE
             onIdle?.invoke()
+        }
+    }
+
+    private fun finalizeHistory() {
+        val sid = historySessionId
+        historySessionId = -1L
+        if (sid < 0) return
+        scope.launch(Dispatchers.IO) {
+            val entries = runCatching { HistoryStore.entries(context, sid) }.getOrDefault(emptyList())
+            if (entries.isEmpty()) {
+                runCatching { HistoryStore.deleteSession(context, sid) }
+                return@launch
+            }
+            val titled = runCatching {
+                HistoryStore.listSessions(context).any { it.id == sid && it.title.isNotBlank() }
+            }.getOrDefault(false)
+            if (titled) return@launch
+            val transcript = entries.joinToString("\n") { e ->
+                "${if (e.role == "user") "User" else "Lumina"}: ${e.content.take(400)}"
+            }
+            var title = runCatching {
+                LumiApi.summarizeTitle(context, transcript.take(4000))
+            }.getOrDefault("")
+            if (title.isBlank()) {
+                title = entries.firstOrNull { it.role == "user" }?.content?.take(48) ?: ""
+            }
+            if (title.isNotBlank()) {
+                runCatching { HistoryStore.setTitle(context, sid, title) }
+            }
         }
     }
 
@@ -161,10 +225,89 @@ object LuminaSession {
             isThinking = true
             try {
                 agentLoop(gate)
+                persistExchange(query)
             } finally {
                 isThinking = false
                 pendingApproval = null
             }
+        }
+    }
+
+    fun cancelGeneration() {
+        runningJob?.cancel()
+        runningJob = null
+        isThinking = false
+        pendingApproval = null
+        activeGate = null
+    }
+
+    fun rerunLast() {
+        if (isThinking || state != LuminaState.AWAKENED) return
+        val idx = messages.indexOfLast { msg ->
+            msg.role == Role.USER &&
+                msg.blocks.any { it is Block.Text && it.content.isNotBlank() }
+        }
+        if (idx < 0) return
+        val text = messages[idx].blocks
+            .filterIsInstance<Block.Text>()
+            .joinToString("\n") { it.content }
+        if (text.isBlank()) return
+        messages.subList(idx, messages.size).clear()
+        sendMessage(text)
+    }
+
+    fun listHistory(): List<HistorySession> =
+        runCatching { HistoryStore.listSessions(context) }.getOrDefault(emptyList())
+
+    fun resumeHistory(sessionId: Long): Boolean {
+        if (state != LuminaState.AWAKENED || isThinking) return false
+        val entries = runCatching { HistoryStore.entries(context, sessionId) }
+            .getOrDefault(emptyList())
+        if (entries.isEmpty()) return false
+        runningJob?.cancel()
+        pendingApproval = null
+        isThinking = false
+        activeGate = null
+        messages.clear()
+        for (e in entries) {
+            messages += ChatMessage(
+                role = if (e.role == "user") Role.USER else Role.ASSISTANT,
+                blocks = listOf(Block.Text(e.content))
+            )
+        }
+        historySessionId = sessionId
+        memoryInjectedThisSession = true
+        return true
+    }
+
+    fun deleteHistorySession(sessionId: Long) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { HistoryStore.deleteSession(context, sessionId) }
+        }
+    }
+
+    fun clearHistory() {
+        scope.launch(Dispatchers.IO) {
+            runCatching { HistoryStore.clearAll(context) }
+        }
+    }
+
+    private fun persistExchange(query: String) {
+        val last = messages.lastOrNull { it.role == Role.ASSISTANT } ?: return
+        if (last.blocks.any { it is Block.Error }) return
+        val answer = last.blocks
+            .filterIsInstance<Block.Text>()
+            .joinToString("\n") { it.content }
+        if (answer.isBlank()) return
+        scope.launch(Dispatchers.IO) {
+            var sid = historySessionId
+            if (sid < 0) {
+                sid = runCatching { HistoryStore.createSession(context) }.getOrDefault(-1L)
+                historySessionId = sid
+            }
+            if (sid < 0) return@launch
+            runCatching { HistoryStore.addEntry(context, sid, "user", query) }
+            runCatching { HistoryStore.addEntry(context, sid, "assistant", answer) }
         }
     }
 

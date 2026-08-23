@@ -70,13 +70,17 @@ object PrivacyAudit {
                 }.getOrDefault(packageName)
                 for (o in 0 until packageOps.opCount) {
                     val op = packageOps.getOpAt(o)
-                    val opName = AppOpsManager.opToPublicName(op.opCode)
-                        .removePrefix("android:").replace("_", " ")
-                    val backgroundCount = op.getAccessCount(
-                        AppOpsManager.UID_STATE_BACKGROUND,
-                        AppOpsManager.UID_STATE_CACHED,
-                        0
-                    )
+                    val opName = runCatching {
+                        AppOpsManager.opToPublicName(op.opCode)
+                            .removePrefix("android:").replace("_", " ")
+                    }.getOrDefault("unknown op ${op.opCode}")
+                    val backgroundCount = runCatching {
+                        op.getAccessCount(
+                            AppOpsManager.UID_STATE_BACKGROUND,
+                            AppOpsManager.UID_STATE_CACHED,
+                            AppOpsManager.OP_FLAGS_ALL
+                        )
+                    }.getOrDefault(0L).toInt()
                     if (backgroundCount < BACKGROUND_THRESHOLD) continue
                     violations.put(
                         JSONObject()

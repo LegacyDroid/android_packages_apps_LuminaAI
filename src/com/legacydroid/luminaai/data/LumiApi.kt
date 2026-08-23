@@ -42,12 +42,78 @@ object LumiApi {
     private const val READ_TIMEOUT_MS = 60_000
     private const val MAX_TOKENS = 2048
 
+    const val PROVIDER_LUMINA = "lumina"
+    const val PROVIDER_GEMINI = "gemini"
+    const val PROVIDER_OPENCODE = "opencode"
+
+    val GEMINI_MODELS = listOf(
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3-flash",
+        "gemini-3.5-flash-lite",
+        "gemma-4-26b-a4b-it",
+        "gemma-4-31b-it"
+    )
+
+    val OPENCODE_MODELS = listOf(
+        "x-preview-f-free",
+        "big-pickle",
+        "nemotron-3.5-lightning-free",
+        "laguna-s-2.1-free",
+        "hy3-free",
+        "nemotron-3-ultra-free",
+        "mimo-v2.5-free"
+    )
+
+    const val DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
+    const val DEFAULT_OPENCODE_MODEL = "x-preview-f-free"
+    private const val TITLE_MODEL = "gemini-3.5-flash-lite"
+
+    suspend fun summarizeTitle(context: Context, transcript: String): String =
+        withContext(Dispatchers.IO) {
+            if (transcript.isBlank()) return@withContext ""
+            val systemPrompt = "You write ultra-short chat session titles. Reply with ONLY the title: " +
+                "3 to 6 words, no quotes, no punctuation at the end, no emoji. " +
+                "Base it on what the conversation is about."
+            val userContent = "Conversation:\n$transcript\n\nTitle:"
+            val result = lumiChat(
+                context,
+                listOf(ApiMessage(role = "user", content = userContent)),
+                null,
+                PROVIDER_GEMINI,
+                TITLE_MODEL,
+                systemPrompt
+            )
+            val raw = when (result) {
+                is LumiResult.Success -> result.reply
+                else -> ""
+            }
+            raw.trim()
+                .removeSurrounding("\"")
+                .replace(Regex("^[#*\\-\\s]+"), "")
+                .lineFirst()
+                .take(60)
+                .trim()
+                .trimEnd('.', '!', '?', ',', ':', ';')
+        }
+
+    private fun String.lineFirst(): String = lineSequence().firstOrNull { it.isNotBlank() } ?: ""
+
     fun readConfig(context: Context): EngineConfig {
+        val provider = (
+            Settings.Global.getString(context.contentResolver, "legacydroid_luminaai_provider")
+                ?: PROVIDER_LUMINA
+            ).let { if (it == "custom") "custom" else PROVIDER_LUMINA }
+        val rawModel = Settings.Global.getString(context.contentResolver, "legacydroid_luminaai_model")
+            ?.trim().orEmpty()
+        val model = if (rawModel in GEMINI_MODELS || rawModel in OPENCODE_MODELS) {
+            rawModel
+        } else {
+            DEFAULT_GEMINI_MODEL
+        }
         return EngineConfig(
-            provider = Settings.Global.getString(context.contentResolver, "legacydroid_luminaai_provider")
-                ?: "gemini",
-            model = Settings.Global.getString(context.contentResolver, "legacydroid_luminaai_model")
-                ?: "gemini-3.5-flash-lite",
+            provider = provider,
+            model = model,
             customBaseUrl = Settings.Global.getString(context.contentResolver, "legacydroid_luminaai_custom_base_url")
                 ?: "",
             customApiKey = Settings.Global.getString(context.contentResolver, "legacydroid_luminaai_custom_api_key")
@@ -65,7 +131,6 @@ object LumiApi {
     ): LumiResult = withContext(Dispatchers.IO) {
         val config = readConfig(context)
         when (config.provider) {
-            "opencode" -> lumiChat(context, messages, toolsJson, "opencode", config.model, systemPrompt)
             "custom" -> {
                 if (config.customBaseUrl.isBlank() || config.customApiKey.isBlank()) {
                     LumiResult.Error("Custom engine is not configured. Add the base URL and API key in Settings.")
@@ -80,7 +145,11 @@ object LumiApi {
                     )
                 }
             }
-            else -> lumiChat(context, messages, toolsJson, "gemini", config.model, systemPrompt)
+            else -> {
+                val wireProvider =
+                    if (config.model in OPENCODE_MODELS) PROVIDER_OPENCODE else PROVIDER_GEMINI
+                lumiChat(context, messages, toolsJson, wireProvider, config.model, systemPrompt)
+            }
         }
     }
 
@@ -100,7 +169,7 @@ object LumiApi {
         if (!systemPrompt.isNullOrBlank()) {
             body.put("system", systemPrompt)
         }
-        if (provider != "gemini" && toolsJson != null && toolsJson.length() > 0) {
+        if (toolsJson != null && toolsJson.length() > 0) {
             body.put("tools", toolsJson)
             body.put("tool_choice", "auto")
         }

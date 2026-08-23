@@ -30,15 +30,30 @@ object NotificationHub {
 
     private const val TAG = "LuminaNotificationHub"
     private const val BUFFER_MAX = 50
-    private const val OTP_REGEX =
-        "\\b(\\d{4,8})\\b"
-    private const val OTP_KEYWORDS =
-        "otp|one[- ]?time|verification|verify|code|mã|密码|пароль|passcode|p\\s?in|auth|login code"
+
+    // Unicode-safe word boundaries so "shipping" does not match "pin"
+    // and "barcode" does not match "code".
+    private val OTP_KEYWORDS_REGEX = Regex(
+        "(?<![\\p{L}\\p{N}])(?:otp|one[- ]?time|verification|verify|verify code|" +
+            "passcode|pass code|login[ -]?code|access code|security code|activation code|" +
+            "auth|code|mã|xác minh|密码|验证码|пароль|код|p\\s?in)(?![\\p{L}\\p{N}])",
+        RegexOption.IGNORE_CASE
+    )
+
+    private val SEGMENT_SPLIT_REGEX = Regex("[\\n.,;:!?()\\[\\]{}]+")
+    private val DIGIT_GROUP_SEPARATOR_REGEX = Regex("(?<=\\d)[ \\u00A0\\u2013-](?=\\d)")
+    private val OTP_DIGITS_REGEX = Regex("(?<!\\d)(\\d{4,8})(?!\\d)")
 
     val buffer = ArrayDeque<NotifEntry>()
     var enabled = false
         internal set
     private lateinit var context: Context
+
+    @Volatile
+    private var lastAutoKey: String? = null
+
+    @Volatile
+    private var lastAutoTime: Long = 0L
 
     fun init(ctx: Context) {
         context = ctx.applicationContext
@@ -67,7 +82,10 @@ object NotificationHub {
         val notif = sbn.notification ?: return
         val extras = notif.extras
         val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
-        val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        var text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        if (text.isBlank()) {
+            text = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
+        }
         if (title.isBlank() && text.isBlank()) return
         val label = runCatching {
             context.packageManager.getApplicationLabel(
@@ -75,28 +93,35 @@ object NotificationHub {
             ).toString()
         }.getOrDefault(sbn.packageName)
 
-        buffer.removeAll { it.key == sbn.key }
-        buffer.addLast(
-            NotifEntry(
-                key = sbn.key,
-                packageName = sbn.packageName,
-                appLabel = label,
-                title = title,
-                text = text,
-                postTime = sbn.postTime
+        synchronized(buffer) {
+            buffer.removeAll { it.key == sbn.key }
+            buffer.addLast(
+                NotifEntry(
+                    key = sbn.key,
+                    packageName = sbn.packageName,
+                    appLabel = label,
+                    title = title,
+                    text = text,
+                    postTime = sbn.postTime
+                )
             )
-        )
-        while (buffer.size > BUFFER_MAX) buffer.removeFirst()
+            while (buffer.size > BUFFER_MAX) buffer.removeFirst()
+        }
         handleOtp(sbn.key, label, title, text)
     }
 
     fun remove(key: String) {
-        buffer.removeAll { it.key == key }
+        synchronized(buffer) {
+            buffer.removeAll { it.key == key }
+        }
     }
 
     fun recentJson(limit: Int): JSONObject {
+        val snapshot = synchronized(buffer) {
+            buffer.takeLast(limit.coerceIn(1, BUFFER_MAX))
+        }
         val arr = JSONArray()
-        for (n in buffer.takeLast(limit.coerceIn(1, BUFFER_MAX))) {
+        for (n in snapshot) {
             arr.put(
                 JSONObject()
                     .put("app", n.appLabel)
@@ -110,16 +135,23 @@ object NotificationHub {
     }
 
     fun extractOtp(): JSONObject {
-        val match = buffer.lastOrNull { findOtp(it) != null } ?: return JSONObject().put("otp_found", false)
-        val otp = findOtp(match)!!
-        val result = JSONObject()
+        val match = synchronized(buffer) {
+            buffer.lastOrNull { findOtp(it.title, it.text) != null }
+        } ?: return JSONObject().put("otp_found", false)
+
+        val otp = findOtp(match.title, match.text)!!
+        val dismissed = cancelNotification(match.key)
+        return JSONObject()
             .put("otp_found", true)
             .put("otp", otp)
             .put("app", match.appLabel)
-            .put("message", "OTP $otp copied to clipboard and its notification was dismissed.")
-        ClipboardTools.copy(context, otp)
-        cancelNotification(match.key)
-        return result
+            .put("dismissed", dismissed)
+            .put(
+                "message",
+                if (dismissed) "OTP $otp copied to clipboard and its notification was dismissed."
+                else "OTP $otp copied to clipboard (notification could not be dismissed)."
+            )
+            .also { ClipboardTools.copy(context, otp, sensitive = true) }
     }
 
     private fun handleOtp(key: String, label: String, title: String, text: String) {
@@ -128,26 +160,57 @@ object NotificationHub {
             "legacydroid_luminaai_auto_otp", 1
         ) == 1
         if (!enabled) return
+        val now = System.currentTimeMillis()
+        if (key == lastAutoKey && now - lastAutoTime < 30_000) return
         val hay = "$title $text"
-        if (!hay.lowercase().contains(Regex(OTP_KEYWORDS))) return
+        if (!OTP_KEYWORDS_REGEX.containsMatchIn(hay)) return
         val otp = findOtp(title, text) ?: return
-        ClipboardTools.copy(context, otp)
+        lastAutoKey = key
+        lastAutoTime = now
+        ClipboardTools.copy(context, otp, sensitive = true)
         cancelNotification(key)
         Log.i(TAG, "Auto-copied OTP from $label")
     }
 
-    private fun findOtp(entry: NotifEntry): String? = findOtp(entry.title, entry.text)
-
+    /**
+     * Picks the OTP from notification text. Digits are searched first inside the
+     * sentence fragments that contain an OTP keyword; the candidate closest to
+     * the keyword wins. Falls back to a whole-text scan. Grouped digits such as
+     * "123 456" are joined before matching.
+     */
     private fun findOtp(title: String, text: String): String? {
         val hay = "$title $text"
-        val hasKeyword = hay.lowercase().contains(Regex(OTP_KEYWORDS))
-        if (!hasKeyword) return null
-        return Regex(OTP_REGEX).find(hay)?.groupValues?.get(1)
+        if (!OTP_KEYWORDS_REGEX.containsMatchIn(hay)) return null
+
+        val segments = hay.split(SEGMENT_SPLIT_REGEX).filter { it.isNotBlank() }
+        val keywordSegments = segments.filter { OTP_KEYWORDS_REGEX.containsMatchIn(it) }
+            .ifEmpty { segments }
+
+        for (segment in keywordSegments) {
+            val joined = DIGIT_GROUP_SEPARATOR_REGEX.replace(segment, "")
+            val candidates = OTP_DIGITS_REGEX.findAll(joined)
+                .map { it.groupValues[1] to it.range.first }
+                .toList()
+            if (candidates.isEmpty()) continue
+            val keywordIndex = OTP_KEYWORDS_REGEX.find(joined)?.range?.first ?: -1
+            val best = candidates
+                .filterNot { (_, v) -> v.toIntOrNull() in 1900..2099 }
+                .ifEmpty { candidates }
+                .minByOrNull { (_, idx) ->
+                    if (keywordIndex < 0) Int.MAX_VALUE else kotlin.math.abs(idx - keywordIndex)
+                }
+            best?.let { return it.first }
+        }
+        return null
     }
 
-    private fun cancelNotification(key: String) {
-        (listenerInstance)?.cancelNotification(key)
-        buffer.removeAll { it.key == key }
+    private fun cancelNotification(key: String): Boolean {
+        val service = listenerInstance ?: return false
+        val ok = runCatching { service.cancelNotification(key) }.isSuccess
+        synchronized(buffer) {
+            buffer.removeAll { it.key == key }
+        }
+        return ok
     }
 
     private var listenerInstance: LuminaNotificationListener? = null

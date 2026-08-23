@@ -7,6 +7,7 @@ package com.legacydroid.luminaai.data
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.wifi.WifiManager
@@ -152,9 +153,19 @@ object ToolRegistry {
             risk = ToolRisk.CONFIRM
         ) { args ->
             val cm = ctx.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cm.cameraIdList.firstOrNull()
-                ?: return@ToolSpec wrapFail("No camera found on this device")
-            cm.setTorchMode(cameraId, args.optBoolean("enabled"))
+            val cameraId = cm.cameraIdList.firstOrNull { id ->
+                runCatching {
+                    val chars = cm.getCameraCharacteristics(id)
+                    chars.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true &&
+                        chars.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) ==
+                        android.hardware.camera2.CameraMetadata.LENS_FACING_BACK
+                }.getOrDefault(false)
+            } ?: return@ToolSpec wrapFail("No flashlight found on this device")
+            runCatching {
+                cm.setTorchMode(cameraId, args.optBoolean("enabled"))
+            }.getOrElse {
+                return@ToolSpec wrapFail("Failed to toggle torch: ${it.message ?: it.javaClass.simpleName}")
+            }
             wrapSuccess(JSONObject().put("torch_on", args.optBoolean("enabled")))
         },
 
@@ -170,25 +181,29 @@ object ToolRegistry {
             risk = ToolRisk.AUTO
         ) { args ->
             val q = args.optString("query").trim()
-            val pm = ctx.packageManager
-            val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-            val apps = pm.queryIntentActivities(launchIntent, 0)
+            val apps = installedLaunchers()
             val matches = if (q.isBlank()) {
                 apps.take(10)
             } else {
                 val nq = normalizeAppName(q)
-                apps.filter {
-                    val label = normalizeAppName(loadLabel(it.activityInfo.packageName))
-                    val pkg = normalizeAppName(it.activityInfo.packageName)
-                    label.contains(nq) || pkg.contains(nq)
-                }.take(5)
+                val direct = apps.filter { (pkg, label) ->
+                    val nl = normalizeAppName(label)
+                    val np = normalizeAppName(pkg)
+                    nl.contains(nq) || np.contains(nq)
+                }
+                val result = if (direct.isNotEmpty()) {
+                    direct
+                } else {
+                    matchBySynonyms(apps, nq)
+                }
+                result.take(8)
             }
             val arr = JSONArray()
-            matches.forEach {
+            matches.forEach { (pkg, label) ->
                 arr.put(
                     JSONObject()
-                        .put("name", loadLabel(it.activityInfo.packageName))
-                        .put("package", it.activityInfo.packageName)
+                        .put("name", label)
+                        .put("package", pkg)
                 )
             }
             wrapSuccess(JSONObject().put("results", arr))
@@ -263,8 +278,17 @@ object ToolRegistry {
             ),
             risk = ToolRisk.AUTO
         ) { args ->
-            ClipboardTools.copy(ctx, args.optString("text"))
-            wrapSuccess(JSONObject().put("copied", true))
+            val text = args.optString("text")
+            if (text.isBlank()) {
+                return@ToolSpec wrapFail("Nothing to copy: provide non-empty text")
+            }
+            val ok = ClipboardTools.copy(ctx, text)
+            if (!ok) return@ToolSpec wrapFail("Clipboard write failed")
+            wrapSuccess(
+                JSONObject()
+                    .put("copied", true)
+                    .put("length", text.length)
+            )
         },
 
         ToolSpec(
@@ -308,11 +332,12 @@ object ToolRegistry {
         ) { args ->
             val content = args.optString("content").trim()
             if (content.isBlank()) return@ToolSpec wrapFail("Nothing to remember")
+            val importance = MemoryStore.normalizeImportance(args.optString("importance", "normal"))
             MemoryStore.save(
                 MemoryEntry(
                     id = java.util.UUID.randomUUID().toString(),
                     content = content,
-                    importance = args.optString("importance", "normal"),
+                    importance = importance,
                     source = "ai",
                     createdAt = System.currentTimeMillis()
                 )
@@ -321,6 +346,7 @@ object ToolRegistry {
                 JSONObject()
                     .put("saved", true)
                     .put("content", content)
+                    .put("importance", importance)
                     .put("memory_count", MemoryStore.load().size)
             )
         },
@@ -336,7 +362,11 @@ object ToolRegistry {
             ),
             risk = ToolRisk.AUTO
         ) { args ->
-            val mems = MemoryStore.search(args.optString("query"))
+            val query = args.optString("query").trim()
+            if (query.isBlank()) {
+                return@ToolSpec wrapFail("Provide keywords to search memories")
+            }
+            val mems = MemoryStore.search(query).take(20)
             wrapSuccess(
                 JSONObject().put(
                     "memories",
@@ -365,14 +395,21 @@ object ToolRegistry {
             ),
             risk = ToolRisk.AUTO
         ) { args ->
-            var removed: MemoryEntry? = null
-            val id = args.optString("id")
-            val contentQuery = args.optString("content")
-            if (id.isNotBlank()) {
-                removed = MemoryStore.load().firstOrNull { it.id == id }
+            val id = args.optString("id").trim()
+            val contentQuery = args.optString("content").trim()
+            val removed: MemoryEntry? = if (id.isNotBlank()) {
+                MemoryStore.load().firstOrNull { it.id == id }
             } else if (contentQuery.isNotBlank()) {
-                removed = MemoryStore.search(contentQuery).firstOrNull()
-            }
+                val matches = MemoryStore.search(contentQuery)
+                if (matches.size > 1) {
+                    return@ToolSpec wrapFail(
+                        "${matches.size} memories match '$contentQuery'. " +
+                            "Delete one by id instead. Ids: " +
+                            matches.take(5).joinToString(" | ") { "${it.id.substring(0, 8)}: ${it.content.take(40)}" }
+                    )
+                }
+                matches.firstOrNull()
+            } else null
             if (removed == null) return@ToolSpec wrapFail("No matching memory found")
             MemoryStore.delete(removed.id)
             wrapSuccess(
@@ -545,32 +582,99 @@ object ToolRegistry {
     }
 
     fun resolveApp(query: String): Pair<String, String>? {
-        val pm = ctx.packageManager
         val nq = normalizeAppName(query)
-        val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = pm.queryIntentActivities(launchIntent, 0)
-        val direct = apps.firstOrNull {
-            normalizeAppName(it.activityInfo.packageName) == nq
+        if (nq.isEmpty()) return null
+        val apps = installedLaunchers()
+        apps.firstOrNull { (pkg, _) -> normalizeAppName(pkg) == nq }
+            ?.let { return it }
+        apps.firstOrNull { (_, label) -> normalizeAppName(label).contains(nq) }
+            ?.let { return it }
+        apps.firstOrNull { (pkg, label) ->
+            normalizeAppName("$label $pkg").split(' ', '-', '_')
+                .any { it.isNotEmpty() && (it == nq || it.startsWith(nq)) }
         }
-        if (direct != null) {
-            return direct.activityInfo.packageName to
-                loadLabel(direct.activityInfo.packageName)
-        }
-        val byLabel = apps.firstOrNull {
-            normalizeAppName(loadLabel(it.activityInfo.packageName)).contains(nq)
-        }
-        if (byLabel != null) {
-            return byLabel.activityInfo.packageName to loadLabel(byLabel.activityInfo.packageName)
-        }
-        val byKeyword = apps.firstOrNull {
-            val label = normalizeAppName(loadLabel(it.activityInfo.packageName))
-            label.isNotEmpty() && nq.isNotEmpty() && label.split(' ', '-', '_').any { it == nq }
-        }
-        if (byKeyword != null) {
-            return byKeyword.activityInfo.packageName to loadLabel(byKeyword.activityInfo.packageName)
-        }
+            ?.let { return it }
+        matchBySynonyms(apps, nq).firstOrNull()?.let { return it }
         return null
     }
+
+    private fun installedLaunchers(): List<Pair<String, String>> {
+        val pm = ctx.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val flags = PackageManager.MATCH_DIRECT_BOOT_AWARE or
+            PackageManager.MATCH_DIRECT_BOOT_UNAWARE
+        return runCatching { pm.queryIntentActivities(intent, flags) }
+            .getOrDefault(emptyList())
+            .asSequence()
+            .map { it.activityInfo.packageName }
+            .distinct()
+            .map { it to loadLabel(it) }
+            .sortedBy { it.second.lowercase() }
+            .toList()
+    }
+
+    private fun matchBySynonyms(
+        apps: List<Pair<String, String>>,
+        nq: String
+    ): List<Pair<String, String>> {
+        val terms = synonymTerms(nq)
+        if (terms.isEmpty()) return emptyList()
+        return apps.filter { (pkg, label) ->
+            val hay = normalizeAppName("$label $pkg")
+            terms.any { hay.contains(it) }
+        }
+    }
+
+    private fun synonymTerms(q: String): Set<String> {
+        val out = mutableSetOf(q)
+        val singular = q.removeSuffix("s")
+        APP_SYNONYMS[q]?.let { out.addAll(it) }
+        APP_SYNONYMS[singular]?.let { out.addAll(it) }
+        return out
+    }
+
+    private val APP_SYNONYMS: Map<String, Set<String>> = mapOf(
+        "gallery" to setOf("gallery", "gallery3d", "aperture", "photos", "photo",
+            "fotos", "galeria", "galerie"),
+        "photo" to setOf("photos", "photo", "gallery", "gallery3d", "aperture",
+            "fotos", "galeria"),
+        "picture" to setOf("picture", "pictures", "pics", "photos", "gallery",
+            "aperture", "image"),
+        "pic" to setOf("pics", "photos", "gallery", "aperture"),
+        "camera" to setOf("camera", "aperture", "snap", "cam"),
+        "browser" to setOf("browser", "chrome", "jelly", "web", "internet",
+            "firefox", "firefox_klar"),
+        "internet" to setOf("browser", "chrome", "web", "internet"),
+        "message" to setOf("messaging", "messages", "sms", "text", "chat"),
+        "sms" to setOf("messaging", "messages", "sms", "text"),
+        "phone" to setOf("dialer", "phone", "call", "telefon", "contacts"),
+        "dialer" to setOf("dialer", "phone", "call", "telefon"),
+        "clock" to setOf("clock", "alarm", "timer", "deskclock", "stopwatch"),
+        "alarm" to setOf("clock", "alarm", "deskclock", "timer"),
+        "calculator" to setOf("calculator", "calc", "exactcalculator"),
+        "calendar" to setOf("calendar", "etar", "agenda"),
+        "mail" to setOf("mail", "email", "gmail", "imap"),
+        "email" to setOf("mail", "email", "gmail", "imap"),
+        "music" to setOf("music", "audio", "player", "eleven", "song", "songs"),
+        "audio" to setOf("audio", "music", "player", "sound"),
+        "video" to setOf("video", "videos", "movie", "movies", "player"),
+        "file" to setOf("files", "file", "explorer", "manager", "documentsui",
+            "documents", "storage"),
+        "files" to setOf("files", "file", "explorer", "manager", "documentsui",
+            "documents", "storage"),
+        "store" to setOf("store", "play", "market", "aurora"),
+        "play" to setOf("play", "store", "market", "games"),
+        "map" to setOf("maps", "map", "gps", "navigation"),
+        "maps" to setOf("maps", "map", "gps", "navigation"),
+        "note" to setOf("notes", "note", "memo", "keep", "journal"),
+        "contact" to setOf("contacts", "people", "phonebook"),
+        "contacts" to setOf("contacts", "people", "phonebook"),
+        "weather" to setOf("weather", "forecast"),
+        "recorder" to setOf("recorder", "record", "voice", "tape"),
+        "radio" to setOf("radio", "fm", "fmradio"),
+        "terminal" to setOf("terminal", "shell", "termux", "console"),
+        "wallet" to setOf("wallet", "pay", "payment", "quickaccesswallet")
+    )
 
     private fun normalizeAppName(s: String): String {
         var out = s.trim().lowercase()
