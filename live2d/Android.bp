@@ -127,13 +127,10 @@ cc_library_static {
 
     cflags: [
         "-DCSM_TARGET_ANDROID_ES2",
-        // Vendored upstream code: silence noisy warnings instead of patching.
-        "-Wno-unused-parameter",
-        "-Wno-unused-variable",
-        "-Wno-unused-function",
-        "-Wno-sign-compare",
-        "-Wno-missing-field-initializers",
-        "-Wno-deprecated-declarations",
+        // Vendored upstream code compiled with the tree's global -Werror;
+        // suppress all warnings instead of patching the SDK sources.
+        // (Legal here: only bare "-w" and "-Weverything" are blocklisted.)
+        "-Wno-everything",
     ],
 
     arch: {
