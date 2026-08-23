@@ -194,7 +194,7 @@ object NotificationHub {
             if (candidates.isEmpty()) continue
             val keywordIndex = OTP_KEYWORDS_REGEX.find(joined)?.range?.first ?: -1
             val best = candidates
-                .filterNot { (_, v) -> v.toIntOrNull() in 1900..2099 }
+                .filterNot { (value, _) -> value.toIntOrNull() in 1900..2099 }
                 .ifEmpty { candidates }
                 .minByOrNull { (_, idx) ->
                     if (keywordIndex < 0) Int.MAX_VALUE else kotlin.math.abs(idx - keywordIndex)

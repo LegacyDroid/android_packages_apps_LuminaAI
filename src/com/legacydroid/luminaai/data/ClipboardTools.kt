@@ -28,6 +28,7 @@ object ClipboardTools {
                 }
             }
             cm.setPrimaryClip(clip)
+            true
         }.getOrDefault(false)
     }
 
