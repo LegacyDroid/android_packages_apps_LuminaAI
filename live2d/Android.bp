@@ -142,6 +142,9 @@ cc_library_static {
         },
     },
 
+    // The Framework uses dynamic_cast (CubismUserModel::GetRenderer).
+    rtti: true,
+
     sdk_version: "24",
     stl: "c++_static",
 }
@@ -191,6 +194,8 @@ cc_library_shared {
             enabled: false,
         },
     },
+
+    rtti: true,
 
     sdk_version: "24",
     stl: "c++_static",
