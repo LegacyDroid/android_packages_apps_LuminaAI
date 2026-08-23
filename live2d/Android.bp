@@ -114,6 +114,7 @@ cc_library_static {
     ],
 
     local_include_dirs: [
+        "cpp",
         "vendor/cubism/CubismSdkForNative-5-r.5/Framework/src",
         "vendor/cubism/CubismSdkForNative-5-r.5/Core/include",
     ],
