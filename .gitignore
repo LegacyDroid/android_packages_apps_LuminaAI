@@ -2,6 +2,11 @@
 # only when embedded in the app, and the IceGirl model license forbids
 # redistributing the model data. Both are staged locally by live2d/get_vendor.sh.
 live2d/vendor/
+
+# Staged avatar assets (model + shaders) must never be committed - the dir
+# itself stays alive via the committed .keep placeholder.
+live2d/assets/*
+!live2d/assets/.keep
 *.rar
 
 # Local build artifacts

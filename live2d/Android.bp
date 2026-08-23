@@ -127,10 +127,9 @@ cc_library_static {
 
     cflags: [
         "-DCSM_TARGET_ANDROID_ES2",
-        // Vendored upstream code compiled with the tree's global -Werror;
-        // suppress all warnings instead of patching the SDK sources.
-        // (Legal here: only bare "-w" and "-Weverything" are blocklisted.)
-        "-Wno-everything",
+        // Forced-include pragma shield: beats the tree's global -Werror that
+        // is appended after module cflags (see VendorWarningShield.h).
+        "-include VendorWarningShield.h",
     ],
 
     arch: {
@@ -177,6 +176,8 @@ cc_library_shared {
     cflags: [
         "-DCSM_TARGET_ANDROID_ES2",
         "-std=c++14",
+        // SDK headers leak warnings into our TUs; shield them here too.
+        "-include VendorWarningShield.h",
     ],
 
     arch: {
