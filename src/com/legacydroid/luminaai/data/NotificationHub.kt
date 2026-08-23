@@ -9,7 +9,6 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -34,7 +33,7 @@ object NotificationHub {
     // Unicode-safe word boundaries so "shipping" does not match "pin"
     // and "barcode" does not match "code".
     private val OTP_KEYWORDS_REGEX = Regex(
-        "(?<![\\p{L}\\p{N}])(?:otp|one[- ]?time|verification|verify|verify code|" +
+        "(?<![\\p{L}\\p{N}])(?:[o0]?tp|one[- ]?time|verification|verify|verify code|" +
             "passcode|pass code|login[ -]?code|access code|security code|activation code|" +
             "auth|code|mã|xác minh|密码|验证码|пароль|код|p\\s?in)(?![\\p{L}\\p{N}])",
         RegexOption.IGNORE_CASE
@@ -62,20 +61,36 @@ object NotificationHub {
     fun grantListenerAccess(ctx: Context) {
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val cn = ComponentName(ctx, LuminaNotificationListener::class.java)
-        val granted = nm.isNotificationListenerAccessGranted(cn)
-        if (!granted) {
-            runCatching { nm.setNotificationListenerAccessGranted(cn, true) }
-                .onSuccess { Log.i(TAG, "Notification listener access granted (system)") }
-                .onFailure {
-                    Log.w(TAG, "System grant failed, opening settings: $it")
-                    runCatching {
-                        ctx.startActivity(
-                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
-                }
-        }
+        val alreadyGranted = runCatching { nm.isNotificationListenerAccessGranted(cn) }
+            .getOrDefault(false)
+        if (alreadyGranted) return
+
+        val grantedDirectly = runCatching { nm.setNotificationListenerAccessGranted(cn, true) }
+            .onSuccess { Log.i(TAG, "Notification listener access granted (system)") }
+            .isSuccess
+        if (grantedDirectly) return
+
+        // Fallback: write enabled_notification_listeners directly; the app holds
+        // WRITE_SECURE_SETTINGS. NotificationManagerService rebinding on this
+        // setting change is what actually connects the listener.
+        runCatching {
+            val flat = cn.flattenToString()
+            val current = Settings.Secure.getString(
+                ctx.contentResolver,
+                Settings.Secure.ENABLED_NOTIFICATION_LISTENERS
+            ) ?: ""
+            val parts = current.split(':').filter { it.isNotBlank() }
+            if (!parts.contains(flat)) {
+                Settings.Secure.putString(
+                    ctx.contentResolver,
+                    Settings.Secure.ENABLED_NOTIFICATION_LISTENERS,
+                    (parts + flat).joinToString(":")
+                )
+                Log.i(TAG, "Notification listener access granted via secure settings")
+            } else {
+                Log.i(TAG, "Listener listed in secure settings, waiting for system bind")
+            }
+        }.onFailure { Log.w(TAG, "Secure-settings listener grant failed", it) }
     }
 
     fun record(sbn: StatusBarNotification) {
@@ -131,15 +146,21 @@ object NotificationHub {
                     .put("time", n.postTime)
             )
         }
-        return JSONObject().put("notifications", arr)
+        return JSONObject()
+            .put("notifications", arr)
+            .put("listener_connected", enabled)
     }
 
     fun extractOtp(): JSONObject {
         val match = synchronized(buffer) {
             buffer.lastOrNull { findOtp(it.title, it.text) != null }
-        } ?: return JSONObject().put("otp_found", false)
+        } ?: return JSONObject()
+            .put("otp_found", false)
+            .put("listener_connected", enabled)
+            .put("buffered_notifications", synchronized(buffer) { buffer.size })
 
         val otp = findOtp(match.title, match.text)!!
+        ClipboardTools.copy(context, otp, sensitive = true)
         val dismissed = cancelNotification(match.key)
         return JSONObject()
             .put("otp_found", true)
@@ -151,7 +172,6 @@ object NotificationHub {
                 if (dismissed) "OTP $otp copied to clipboard and its notification was dismissed."
                 else "OTP $otp copied to clipboard (notification could not be dismissed)."
             )
-            .also { ClipboardTools.copy(context, otp, sensitive = true) }
     }
 
     private fun handleOtp(key: String, label: String, title: String, text: String) {
