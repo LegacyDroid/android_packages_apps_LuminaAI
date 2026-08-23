@@ -26,9 +26,10 @@ android_app {
     // gracefully reports as unavailable at runtime).
     asset_dirs: ["live2d/assets"],
 
-    // Native Live2D engine, embedded into the APK.
+    // Native Live2D engine. Extracted to priv-app/<pkg>/lib at scan time -
+    // embedded (extractNativeLibs=false) loading is unreliable for
+    // preinstalled system_ext apps on this tree.
     jni_libs: ["libluminalive2d"],
-    use_embedded_native_libs: true,
 
     manifest: "AndroidManifest.xml",
 
