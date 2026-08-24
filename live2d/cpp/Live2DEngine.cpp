@@ -31,6 +31,10 @@ Live2DEngine* s_instance = nullptr;
 const csmChar* kModelDirectory = "";
 const csmChar* kModelJsonName = "IceGirl.model3.json";
 
+/** Uniform zoom applied after the fit - makes IceGirl 25% larger than the
+ *  plain fit-to-screen (user preference for this model). */
+const csmFloat32 kAvatarZoom = 1.25f;
+
 /** Distance in device px below which a touch counts as a tap. */
 const csmFloat32 kTapThreshold = 20.0f;
 } // namespace
@@ -226,6 +230,13 @@ void Live2DEngine::Run()
         _model->GetModelMatrix()->SetHeight(2.0f);
         projection.Scale(1.0f / aspectRatio, 1.0f);
     }
+    // Canvas space is top-left-origin (Y down); without an explicit centering
+    // the model anchors at the logical origin and draws upward off-screen.
+    // Official sample models carry a Layout block that does this - IceGirl
+    // does not, so center it here. Zoom makes her slightly larger than the
+    // plain fit (user preference for this specific model).
+    _model->GetModelMatrix()->SetCenterPosition(0.0f, 0.0f);
+    projection.ScaleRelative(kAvatarZoom, kAvatarZoom);
     projection.MultiplyByMatrix(_viewMatrix);
 
     _model->Update();
