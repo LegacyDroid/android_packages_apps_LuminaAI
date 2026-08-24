@@ -159,6 +159,10 @@ cc_library_static {
 cc_library_shared {
     name: "libluminalive2d",
 
+    // Packaged into the APK via the app's jni_libs only - a standalone
+    // install to /system/lib64 would trip artifact_path_requirements.
+    installable: false,
+
     srcs: [
         "cpp/Live2DEngine.cpp",
         "cpp/SampleModel.cpp",
