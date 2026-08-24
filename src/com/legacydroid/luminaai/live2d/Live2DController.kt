@@ -86,9 +86,8 @@ object Live2DController {
 
         val appContext = context.applicationContext
         val bridgeReady = runCatching {
-            // Touching Live2DBridge triggers its static init -> loadLibrary.
-            val cls = Class.forName("com.legacydroid.luminaai.live2d.Live2DBridge")
-            cls.getMethod("initialize", Context::class.java).invoke(null, appContext)
+            // Triggers Live2DBridge's static init -> System.loadLibrary.
+            Live2DBridge.initialize(appContext)
             android.util.Log.i(TAG, "bridge initialized ok")
             true
         }.onFailure {
