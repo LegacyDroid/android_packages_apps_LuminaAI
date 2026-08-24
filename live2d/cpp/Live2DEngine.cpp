@@ -142,33 +142,6 @@ void Live2DEngine::Resize(csmInt32 width, csmInt32 height)
     _height = height;
     glViewport(0, 0, width, height);
     SetupViewMatrices();
-
-    // Position the model canvas: reset to a clean state, apply the same fit
-    // rule Run() uses, then center once. Doing this here (per real size
-    // change, in post-fit logical units) keeps the incremental setters of
-    // CubismModelMatrix from accumulating drift across frames.
-    if (_model != nullptr && _model->GetModel() != nullptr && width > 0 && height > 0)
-    {
-        const csmFloat32 aspectRatio =
-            static_cast<csmFloat32>(width) / static_cast<csmFloat32>(height);
-        const csmFloat32 displayRatio =
-            static_cast<csmFloat32>(height) / static_cast<csmFloat32>(width);
-        const csmFloat32 canvasRatio =
-            _model->GetModel()->GetCanvasHeight() / _model->GetModel()->GetCanvasWidth();
-
-        CubismModelMatrix* mm = _model->GetModelMatrix();
-        mm->LoadIdentity();
-        if (canvasRatio < displayRatio)
-        {
-            mm->SetWidth(2.0f);
-        }
-        else
-        {
-            mm->SetHeight(2.0f);
-        }
-        mm->CenterX(0.0f);
-        mm->CenterY(0.0f);
-    }
 }
 
 void Live2DEngine::SetupViewMatrices()
@@ -237,47 +210,31 @@ void Live2DEngine::Run()
         return;
     }
 
-    // Fit the model into the view (port of the official sample's
-    // LAppLive2DManager::OnUpdate). The model matrix carries the centering
-    // applied once at load time; the projection is rebuilt fresh each frame,
-    // so the relative zoom below cannot accumulate.
-    const csmFloat32 aspectRatio = static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
-    const csmFloat32 displayRatio = static_cast<csmFloat32>(_height) / static_cast<csmFloat32>(_width);
-    const csmFloat32 canvasRatio =
-        _model->GetModel()->GetCanvasHeight() / _model->GetModel()->GetCanvasWidth();
+    // Fully deterministic per-frame transform. Canvas space is [0..W]x[0..H]
+    // (normalized units for this model); map it so the canvas center lands on
+    // the logical origin and Y runs top->down on screen (upright), uniformly
+    // scaled to fit + kAvatarZoom. Positive Y scale keeps triangle winding
+    // intact (a flip gets everything backface-culled to nothing).
+    const csmFloat32 canvasWidth = _model->GetModel()->GetCanvasWidth();
+    const csmFloat32 canvasHeight = _model->GetModel()->GetCanvasHeight();
 
+    const csmFloat32 aspectRatio =
+        static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
+    const csmFloat32 fitWidth = (2.0f * aspectRatio) / canvasWidth;
+    const csmFloat32 fitHeight = 2.0f / canvasHeight;
+    csmFloat32 z = fitWidth < fitHeight ? fitWidth : fitHeight;
+    z *= kAvatarZoom;
+
+    // Identity projection: the model matrix above carries the whole
+    // canvas -> logical transform.
     CubismMatrix44 projection;
-    if (canvasRatio < displayRatio)
-    {
-        // Wide model on a tall screen: fit the width, adjust vertically.
-        _model->GetModelMatrix()->SetWidth(2.0f);
-        projection.Scale(1.0f, aspectRatio);
-    }
-    else
-    {
-        // Tall model: fit the height, adjust horizontally.
-        _model->GetModelMatrix()->SetHeight(2.0f);
-        projection.Scale(1.0f / aspectRatio, 1.0f);
-    }
-    projection.ScaleRelative(kAvatarZoom, kAvatarZoom);
-    projection.MultiplyByMatrix(_viewMatrix);
 
-    // TEMP DEBUG: dump transform state once per second.
-    {
-        static csmInt32 dbgFrame = 0;
-        if ((dbgFrame++ % 60) == 0)
-        {
-            const csmFloat32* m = _model->GetModelMatrix()->GetArray();
-            LAppPal::PrintLogLn(
-                "[DBG] size=%dx%d canvas=%.1fx%.1f ratio=%.3f/%.3f | "
-                "m[0][0]=%.4f m[1][1]=%.4f tx=%.2f ty=%.2f",
-                _width, _height,
-                _model->GetModel()->GetCanvasWidth(),
-                _model->GetModel()->GetCanvasHeight(),
-                aspectRatio, displayRatio,
-                m[0], m[5], m[12], m[13]);
-        }
-    }
+    CubismModelMatrix* modelMatrix = _model->GetModelMatrix();
+    modelMatrix->LoadIdentity();
+    modelMatrix->Scale(z, z);
+    modelMatrix->TranslateRelative(-z * canvasWidth * 0.5f, z * canvasHeight * 0.5f);
+
+    projection.MultiplyByMatrix(_viewMatrix);
 
     _model->Update();
     _model->Draw(projection);
@@ -342,20 +299,20 @@ void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
 
 void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
 {
-    const csmFloat32 aspectRatio = static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
-    const csmFloat32 displayRatio = static_cast<csmFloat32>(_height) / static_cast<csmFloat32>(_width);
-    const csmFloat32 canvasRatio =
-        _model->GetModel()->GetCanvasHeight() / _model->GetModel()->GetCanvasWidth();
+    // Inverse of the per-frame model matrix built in Run():
+    //   view.x = z*cx - z*W/2   ->  cx =  x/z + W/2
+    //   view.y = z*cy + z*H/2   ->  cy =  y/z - H/2
+    const csmFloat32 canvasWidth = _model->GetModel()->GetCanvasWidth();
+    const csmFloat32 canvasHeight = _model->GetModel()->GetCanvasHeight();
+    const csmFloat32 aspectRatio =
+        static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
+    const csmFloat32 fitWidth = (2.0f * aspectRatio) / canvasWidth;
+    const csmFloat32 fitHeight = 2.0f / canvasHeight;
+    csmFloat32 z = fitWidth < fitHeight ? fitWidth : fitHeight;
+    z *= kAvatarZoom;
 
-    // Compensate the projection scaling so the tap maps onto model space
-    // (same math as the official sample).
-    csmFloat32 adjustedX = x;
-    csmFloat32 adjustedY = y;
-    if (canvasRatio < displayRatio)
-    {
-        adjustedX = x / aspectRatio;
-        adjustedY = y / aspectRatio;
-    }
+    const csmFloat32 adjustedX = x / z + canvasWidth * 0.5f;
+    const csmFloat32 adjustedY = y / z - canvasHeight * 0.5f;
 
     if (_model->HitTest(HitAreaNameHead, adjustedX, adjustedY))
     {
