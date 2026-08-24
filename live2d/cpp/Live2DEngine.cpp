@@ -262,6 +262,23 @@ void Live2DEngine::Run()
     projection.ScaleRelative(kAvatarZoom, kAvatarZoom);
     projection.MultiplyByMatrix(_viewMatrix);
 
+    // TEMP DEBUG: dump transform state once per second.
+    {
+        static csmInt32 dbgFrame = 0;
+        if ((dbgFrame++ % 60) == 0)
+        {
+            const csmFloat32* m = _model->GetModelMatrix()->GetArray();
+            LAppPal::PrintLogLn(
+                "[DBG] size=%dx%d canvas=%.1fx%.1f ratio=%.3f/%.3f | "
+                "m[0][0]=%.4f m[1][1]=%.4f tx=%.2f ty=%.2f",
+                _width, _height,
+                _model->GetModel()->GetCanvasWidth(),
+                _model->GetModel()->GetCanvasHeight(),
+                aspectRatio, displayRatio,
+                m[0], m[5], m[12], m[13]);
+        }
+    }
+
     _model->Update();
     _model->Draw(projection);
 }
