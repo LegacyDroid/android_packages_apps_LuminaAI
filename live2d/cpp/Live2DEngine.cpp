@@ -142,6 +142,33 @@ void Live2DEngine::Resize(csmInt32 width, csmInt32 height)
     _height = height;
     glViewport(0, 0, width, height);
     SetupViewMatrices();
+
+    // Position the model canvas: reset to a clean state, apply the same fit
+    // rule Run() uses, then center once. Doing this here (per real size
+    // change, in post-fit logical units) keeps the incremental setters of
+    // CubismModelMatrix from accumulating drift across frames.
+    if (_model != nullptr && _model->GetModel() != nullptr && width > 0 && height > 0)
+    {
+        const csmFloat32 aspectRatio =
+            static_cast<csmFloat32>(width) / static_cast<csmFloat32>(height);
+        const csmFloat32 displayRatio =
+            static_cast<csmFloat32>(height) / static_cast<csmFloat32>(width);
+        const csmFloat32 canvasRatio =
+            _model->GetModel()->GetCanvasHeight() / _model->GetModel()->GetCanvasWidth();
+
+        CubismModelMatrix* mm = _model->GetModelMatrix();
+        mm->LoadIdentity();
+        if (canvasRatio < displayRatio)
+        {
+            mm->SetWidth(2.0f);
+        }
+        else
+        {
+            mm->SetHeight(2.0f);
+        }
+        mm->CenterX(0.0f);
+        mm->CenterY(0.0f);
+    }
 }
 
 void Live2DEngine::SetupViewMatrices()
