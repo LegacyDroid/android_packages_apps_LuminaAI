@@ -63,11 +63,13 @@ fun LuminaAvatar(
             }
             view.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                 override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                    holder.start(view, st, w, h, onModelLoaded)
+                    holder.start(st, w, h, onModelLoaded)
                 }
 
                 override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                    Live2DBridge.nativeOnSurfaceChanged(w, h)
+                    // UI thread has no EGL context - only record the size here;
+                    // the render thread applies glViewport + Resize itself.
+                    holder.requestSize(w, h)
                 }
 
                 override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
@@ -93,16 +95,21 @@ private class AvatarHolder {
 
     private var thread: RenderThread? = null
 
+    fun requestSize(width: Int, height: Int) {
+        thread?.requestSize(width, height)
+    }
+
     @Synchronized
     fun start(
-        view: TextureView,
         surfaceTexture: SurfaceTexture,
         width: Int,
         height: Int,
         onModelLoaded: () -> Unit
     ) {
         stop()
-        thread = RenderThread(surfaceTexture, width, height).also { it.start() }
+        val t = RenderThread(surfaceTexture).also { it.start() }
+        t.requestSize(width, height)
+        thread = t
         // Initialize() loads the model synchronously on the render thread; poll
         // briefly so the UI can crossfade as soon as the first frame exists.
         Thread {
@@ -131,13 +138,26 @@ private class AvatarHolder {
  * 60 fps - Live2D deformation does not benefit much from higher rates.
  */
 private class RenderThread(
-    private val surfaceTexture: SurfaceTexture,
-    private val width: Int,
-    private val height: Int
+    private val surfaceTexture: SurfaceTexture
 ) : Thread("LuminaLive2D-GL") {
 
     @Volatile
     private var running = true
+
+    // Latest requested surface size; applied on this (GL) thread only, since
+    // glViewport and the engine matrices require the current EGL context.
+    @Volatile
+    private var pendingWidth = 0
+
+    @Volatile
+    private var pendingHeight = 0
+    private var appliedWidth = 0
+    private var appliedHeight = 0
+
+    fun requestSize(width: Int, height: Int) {
+        pendingWidth = width
+        pendingHeight = height
+    }
 
     private lateinit var display: EGLDisplay
     private var context: EGLContext? = null
@@ -150,11 +170,17 @@ private class RenderThread(
         }
         runCatching {
             Live2DBridge.nativeOnSurfaceCreated()
-            Live2DBridge.nativeOnSurfaceChanged(width, height)
 
             val frameMillis = 33L
             var lastFrame = System.currentTimeMillis()
             while (running && !isInterrupted) {
+                if (pendingWidth != appliedWidth || pendingHeight != appliedHeight) {
+                    appliedWidth = pendingWidth
+                    appliedHeight = pendingHeight
+                    if (appliedWidth > 0 && appliedHeight > 0) {
+                        Live2DBridge.nativeOnSurfaceChanged(appliedWidth, appliedHeight)
+                    }
+                }
                 Live2DBridge.nativeOnDrawFrame()
                 if (!EGL14.eglSwapBuffers(display, surface)) break
 
