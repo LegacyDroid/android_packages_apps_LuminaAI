@@ -233,7 +233,11 @@ void Live2DEngine::Run()
 
     CubismModelMatrix* modelMatrix = _model->GetModelMatrix();
     modelMatrix->LoadIdentity();
+    // Vertices span [0..W]x[0..H] with Y up and feet at the origin: shift by
+    // half the fitted size so the model centers on the logical origin.
     modelMatrix->Scale(z, z);
+    modelMatrix->TranslateRelative(-z * kAvatarNormalizedWidth * 0.5f,
+                                   -z * kAvatarNormalizedHeight * 0.5f);
 
     projection.MultiplyByMatrix(_viewMatrix);
 
@@ -310,8 +314,12 @@ void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
     csmFloat32 z = fitWidth < fitHeight ? fitWidth : fitHeight;
     z *= kAvatarZoom;
 
-    const csmFloat32 adjustedX = x / z;
-    const csmFloat32 adjustedY = y / z;
+    // Inverse of the per-frame model matrix (uniform scale + half-size
+    // centering translate):
+    //   view.x = z*(vx - W/2)  ->  vx = x/z + W/2
+    //   view.y = z*(vy - H/2)  ->  vy = y/z + H/2
+    const csmFloat32 adjustedX = x / z + kAvatarNormalizedWidth * 0.5f;
+    const csmFloat32 adjustedY = y / z + kAvatarNormalizedHeight * 0.5f;
 
     if (_model->HitTest(HitAreaNameHead, adjustedX, adjustedY))
     {
