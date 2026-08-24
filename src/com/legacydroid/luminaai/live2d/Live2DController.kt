@@ -83,22 +83,35 @@ object Live2DController {
     fun init(context: Context) {
         if (initialized) return
         initialized = true
+
+        val appContext = context.applicationContext
         val bridgeReady = runCatching {
-            Live2DBridge.initialize(context.applicationContext)
+            // Touching Live2DBridge triggers its static init -> loadLibrary.
+            val cls = Class.forName("com.legacydroid.luminaai.live2d.Live2DBridge")
+            cls.getMethod("initialize", Context::class.java).invoke(null, appContext)
+            android.util.Log.i(TAG, "bridge initialized ok")
             true
+        }.onFailure {
+            android.util.Log.w(TAG, "bridge init failed", it)
         }.getOrDefault(false)
+
         val modelStaged = runCatching {
-            context.assets.list("")?.contains("IceGirl.model3.json") == true
+            appContext.assets.list("")?.contains("IceGirl.model3.json") == true
+        }.onFailure {
+            android.util.Log.w(TAG, "model staging probe failed", it)
         }.getOrDefault(false)
+
         available = bridgeReady && modelStaged
         if (!available) {
             android.util.Log.w(
-                "LuminaLive2D",
+                TAG,
                 "Avatar unavailable (lib=$bridgeReady, modelStaged=$modelStaged). " +
                     "Run live2d/get_vendor.sh to stage it."
             )
         }
     }
+
+    private const val TAG = "LuminaLive2D"
 
     /** Called by the render view once the GL thread finished loading. */
     internal fun markLoaded() {

@@ -49,6 +49,7 @@ android_app {
         shrink: true,
         shrink_resources: true,
         proguard_compatibility: false,
+        proguard_flags_files: ["live2d/proguard.flags"],
     },
 
     static_libs: [

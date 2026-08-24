@@ -1,0 +1,5 @@
+# Keep the JNI bridge: the native library binds to it by exact class and
+# method name in JNI_OnLoad / GetStaticMethodID - invisible to R8.
+-keep class com.legacydroid.luminaai.live2d.Live2DBridge {
+    *;
+}
