@@ -33,9 +33,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 @Composable
 fun LuminaAvatar(
     modifier: Modifier = Modifier,
+    touchEnabled: Boolean = true,
     onModelLoaded: () -> Unit = {}
 ) {
     val holder = remember { AvatarHolder() }
+    holder.touchEnabled = touchEnabled
 
     AndroidView(
         modifier = modifier,
@@ -44,8 +46,11 @@ fun LuminaAvatar(
             view.isOpaque = false
             // Forward touches in view-local pixels - the native engine maps
             // them through deviceToScreen for drag-follow and hit tests.
+            // Gated to empty sessions by the caller (chat keeps priority).
             view.setOnTouchListener { _, event ->
-                if (!Live2DController.loaded) return@setOnTouchListener false
+                if (!holder.touchEnabled || !Live2DController.loaded) {
+                    return@setOnTouchListener false
+                }
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN ->
                         Live2DBridge.nativeOnTouchesBegan(event.x, event.y)
@@ -82,6 +87,9 @@ fun LuminaAvatar(
  * Owns the EGL render thread for one TextureView surface.
  */
 private class AvatarHolder {
+
+    @Volatile
+    var touchEnabled = true
 
     private var thread: RenderThread? = null
 

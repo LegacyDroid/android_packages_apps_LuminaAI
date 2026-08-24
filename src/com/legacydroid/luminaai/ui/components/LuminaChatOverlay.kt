@@ -224,10 +224,11 @@ fun LuminaChatOverlay(
             animationSpec = tween(600, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
             label = "modelReveal"
         )
-        // Idle: large centered framing like the demo. Conversation: shrink to
-        // a top strip so her head peeks above the message list.
+        // Idle: full-screen viewport - identical framing/centering to the demo.
+        // Conversation: shrink to a top strip so her head peeks above the
+        // message list. Touch only in empty sessions.
         val avatarHeight by animateDpAsState(
-            targetValue = if (conversationActive) totalHeight * 0.34f else totalHeight * 0.56f,
+            targetValue = if (conversationActive) totalHeight * 0.34f else totalHeight,
             animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
             label = "avatarHeight"
         )
@@ -235,14 +236,16 @@ fun LuminaChatOverlay(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 12.dp)
                     .fillMaxWidth()
                     .height(avatarHeight)
                     .graphicsLayer {
                         alpha = introStage(introProgress.value, 0.45f, 0.85f) * modelReveal
                     }
             ) {
-                LuminaAvatar(modifier = Modifier.fillMaxSize())
+                LuminaAvatar(
+                    modifier = Modifier.fillMaxSize(),
+                    touchEnabled = messages.isEmpty()
+                )
             }
         }
 

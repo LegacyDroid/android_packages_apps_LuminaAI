@@ -195,8 +195,9 @@ void Live2DEngine::Run()
 
     LAppPal::UpdateTime();
 
-    // Solid black background.
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    // Fully transparent clear: the TextureView composites this surface over
+    // the dimmed app, so empty pixels must have alpha 0.
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearDepthf(1.0f);
 
