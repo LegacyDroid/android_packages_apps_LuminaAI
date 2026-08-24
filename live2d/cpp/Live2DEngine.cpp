@@ -35,11 +35,6 @@ const csmChar* kModelJsonName = "IceGirl.model3.json";
  *  plain fit-to-screen (user preference for this model). */
 const csmFloat32 kAvatarZoom = 1.25f;
 
-/** Normalized canvas extents reported by the moc (GetCanvasWidth/Height).
- *  Drawable vertices are centered around the origin in these units. */
-const csmFloat32 kAvatarNormalizedWidth = 1.0f;
-const csmFloat32 kAvatarNormalizedHeight = 1.4f;
-
 /** Distance in device px below which a touch counts as a tap. */
 const csmFloat32 kTapThreshold = 20.0f;
 } // namespace
@@ -215,29 +210,33 @@ void Live2DEngine::Run()
         return;
     }
 
-    // Fully deterministic per-frame transform. This model's drawable
-    // vertices are already centered around the origin in normalized units
-    // (the canvas reports 1.0x1.4), so correct placement is a pure uniform
-    // fit-scale with ZERO translation - any canvas-dimension offset shoves
-    // her off-screen. Positive Y scale keeps triangle winding intact.
+    // Fully self-calibrating per-frame transform, derived from the drawable
+    // bounds measured at load time (SampleModel::MeasureBounds) - no assumed
+    // coordinate convention:
+    //
+    //   view = z*(v - center)        with z chosen so both half-extents
+    //                                fit inside the logical screen,
+    //                                multiplied by kAvatarZoom.
+    const csmFloat32 cx = _model->GetBoundsCenterX();
+    const csmFloat32 cy = _model->GetBoundsCenterY();
+    const csmFloat32 halfWidth = _model->GetBoundsHalfWidth();
+    const csmFloat32 halfHeight = _model->GetBoundsHalfHeight();
+
     const csmFloat32 aspectRatio =
         static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
-    const csmFloat32 fitWidth = (2.0f * aspectRatio) / kAvatarNormalizedWidth;
-    const csmFloat32 fitHeight = 2.0f / kAvatarNormalizedHeight;
-    csmFloat32 z = fitWidth < fitHeight ? fitWidth : fitHeight;
+    const csmFloat32 fitX = aspectRatio / halfWidth;
+    const csmFloat32 fitY = 1.0f / halfHeight;
+    csmFloat32 z = fitX < fitY ? fitX : fitY;
     z *= kAvatarZoom;
 
-    // Identity projection: the model matrix above carries the whole
-    // canvas -> logical transform.
+    // Identity projection: the model matrix below carries the whole
+    // vertex -> logical transform.
     CubismMatrix44 projection;
 
     CubismModelMatrix* modelMatrix = _model->GetModelMatrix();
     modelMatrix->LoadIdentity();
-    // Vertices span [0..W]x[0..H] with Y up and feet at the origin: shift by
-    // half the fitted size so the model centers on the logical origin.
     modelMatrix->Scale(z, z);
-    modelMatrix->TranslateRelative(-z * kAvatarNormalizedWidth * 0.5f,
-                                   -z * kAvatarNormalizedHeight * 0.5f);
+    modelMatrix->TranslateRelative(-z * cx, -z * cy);
 
     projection.MultiplyByMatrix(_viewMatrix);
 
@@ -304,22 +303,22 @@ void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
 
 void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
 {
-    // Inverse of the per-frame model matrix (pure uniform scale):
-    //   view.x = z*vx  ->  vx = x/z
-    //   view.y = z*vy  ->  vy = y/z
+    // Inverse of the per-frame model matrix (uniform scale + center offset):
+    //   view = z*(v - c)   ->   v = view/z + c
+    const csmFloat32 cx = _model->GetBoundsCenterX();
+    const csmFloat32 cy = _model->GetBoundsCenterY();
+    const csmFloat32 halfWidth = _model->GetBoundsHalfWidth();
+    const csmFloat32 halfHeight = _model->GetBoundsHalfHeight();
+
     const csmFloat32 aspectRatio =
         static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
-    const csmFloat32 fitWidth = (2.0f * aspectRatio) / kAvatarNormalizedWidth;
-    const csmFloat32 fitHeight = 2.0f / kAvatarNormalizedHeight;
-    csmFloat32 z = fitWidth < fitHeight ? fitWidth : fitHeight;
+    const csmFloat32 fitX = aspectRatio / halfWidth;
+    const csmFloat32 fitY = 1.0f / halfHeight;
+    csmFloat32 z = fitX < fitY ? fitX : fitY;
     z *= kAvatarZoom;
 
-    // Inverse of the per-frame model matrix (uniform scale + half-size
-    // centering translate):
-    //   view.x = z*(vx - W/2)  ->  vx = x/z + W/2
-    //   view.y = z*(vy - H/2)  ->  vy = y/z + H/2
-    const csmFloat32 adjustedX = x / z + kAvatarNormalizedWidth * 0.5f;
-    const csmFloat32 adjustedY = y / z + kAvatarNormalizedHeight * 0.5f;
+    const csmFloat32 adjustedX = x / z + cx;
+    const csmFloat32 adjustedY = y / z + cy;
 
     if (_model->HitTest(HitAreaNameHead, adjustedX, adjustedY))
     {

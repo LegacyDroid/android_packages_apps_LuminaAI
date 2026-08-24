@@ -250,6 +250,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
     // --- Renderer + textures ---------------------------------------------------------
     CreateRenderer(renderWidth, renderHeight);
     SetupTextures();
+    MeasureBounds();
 
     _updating = false;
     _initialized = true;
@@ -539,6 +540,62 @@ void SampleModel::SetExpression(csmInt32 index)
     {
         LAppPal::PrintLogLn("[Model] expression '%s' not loaded", name);
     }
+}
+
+void SampleModel::MeasureBounds()
+{
+    if (_model == nullptr)
+    {
+        return;
+    }
+
+    csmFloat32 minX = 0.0f, maxX = 0.0f, minY = 0.0f, maxY = 0.0f;
+    bool first = true;
+
+    const csmInt32 drawableCount = _model->GetDrawableCount();
+    for (csmInt32 i = 0; i < drawableCount; ++i)
+    {
+        // Skip invisible drawables so accessories hidden by default do not
+        // skew the framing.
+        if (_model->GetDrawableOpacity(i) <= 0.0f)
+        {
+            continue;
+        }
+        const csmInt32 count = _model->GetDrawableVertexCount(i);
+        const csmFloat32* vertices = _model->GetDrawableVertices(i);
+        for (csmInt32 j = 0; j < count; ++j)
+        {
+            const csmFloat32 x = vertices[Constant::VertexOffset + j * Constant::VertexStep];
+            const csmFloat32 y = vertices[Constant::VertexOffset + j * Constant::VertexStep + 1];
+            if (first)
+            {
+                minX = maxX = x;
+                minY = maxY = y;
+                first = false;
+            }
+            else
+            {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    if (first)
+    {
+        return;
+    }
+
+    _boundsCenterX = (minX + maxX) * 0.5f;
+    _boundsCenterY = (minY + maxY) * 0.5f;
+    _boundsHalfWidth = (maxX - minX) * 0.5f;
+    _boundsHalfHeight = (maxY - minY) * 0.5f;
+
+    LAppPal::PrintLogLn(
+        "[Model] measured bounds: x[%.3f..%.3f] y[%.3f..%.3f] center=(%.3f,%.3f) half=(%.3f,%.3f)",
+        minX, maxX, minY, maxY, _boundsCenterX, _boundsCenterY,
+        _boundsHalfWidth, _boundsHalfHeight);
 }
 
 void SampleModel::ClearExpressions()

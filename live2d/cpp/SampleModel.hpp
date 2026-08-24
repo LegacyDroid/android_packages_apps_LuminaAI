@@ -48,6 +48,20 @@ public:
                     Csm::csmUint32 renderHeight);
 
     /** Advances the model one frame (motion, updaters) - call before Draw(). */
+
+    /**
+     * Measures the real drawable-vertex bounds after load. The transform in
+     * Live2DEngine derives from these measured values instead of assuming a
+     * coordinate convention.
+     */
+    void MeasureBounds();
+
+    /** Bounds center / half-extents (see MeasureBounds). */
+    Csm::csmFloat32 GetBoundsCenterX() const { return _boundsCenterX; }
+    Csm::csmFloat32 GetBoundsCenterY() const { return _boundsCenterY; }
+    Csm::csmFloat32 GetBoundsHalfWidth() const { return _boundsHalfWidth; }
+    Csm::csmFloat32 GetBoundsHalfHeight() const { return _boundsHalfHeight; }
+
     void Update();
 
     /** Draws the model with the given projection matrix. */
@@ -95,6 +109,10 @@ public:
     void SetDragging(Csm::csmFloat32 x, Csm::csmFloat32 y);
 
 private:
+    Csm::csmFloat32 _boundsCenterX = 0.0f;
+    Csm::csmFloat32 _boundsCenterY = 0.0f;
+    Csm::csmFloat32 _boundsHalfWidth = 0.5f;
+    Csm::csmFloat32 _boundsHalfHeight = 0.7f;
     void SetupModel(Csm::csmUint32 renderWidth, Csm::csmUint32 renderHeight);
     void SetupTextures();
     void PreloadMotionGroup(const Csm::csmChar* group);
