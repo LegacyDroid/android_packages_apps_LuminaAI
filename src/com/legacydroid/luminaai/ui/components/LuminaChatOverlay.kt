@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -85,8 +86,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -204,7 +205,9 @@ fun LuminaChatOverlay(
         val totalHeight = maxHeight
         val orbTopOffset = totalHeight * 0.32f
 
-        val conversationActive = messages.isNotEmpty()
+        // Conversation mode starts when the USER sends a message - the
+        // auto-greeting alone keeps the fullscreen hero avatar visible.
+        val conversationActive = messages.any { it.role == Role.USER }
         val heroCollapse by animateFloatAsState(
             targetValue = if (conversationActive) 0f else 1f,
             animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
@@ -225,8 +228,9 @@ fun LuminaChatOverlay(
             label = "modelReveal"
         )
         // Idle: full-screen viewport - identical framing/centering to the demo.
-        // Conversation: shrink to a top strip so her head peeks above the
-        // message list. Touch only in empty sessions.
+        // Conversation: the container clips to a top strip, showing the head +
+        // shoulders of the SAME fullscreen render (the GL surface never
+        // resizes, so there is no re-init churn and no fit distortion).
         val avatarHeight by animateDpAsState(
             targetValue = if (conversationActive) totalHeight * 0.34f else totalHeight,
             animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
@@ -238,13 +242,16 @@ fun LuminaChatOverlay(
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .height(avatarHeight)
+                    .clipToBounds()
                     .graphicsLayer {
                         alpha = introStage(introProgress.value, 0.45f, 0.85f) * modelReveal
                     }
             ) {
                 LuminaAvatar(
-                    modifier = Modifier.fillMaxSize(),
-                    touchEnabled = messages.isEmpty()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .requiredHeight(totalHeight),
+                    touchEnabled = !conversationActive
                 )
             }
         }
@@ -675,8 +682,10 @@ private fun TypewriterBubble(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(appearProgress.value)
-            .offset(y = ((1f - appearProgress.value) * 8f).dp),
+            .graphicsLayer {
+                alpha = appearProgress.value
+                translationY = ((1f - appearProgress.value) * 8f).dp.toPx()
+            },
         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         if (isUser) {
@@ -820,7 +829,7 @@ private fun ToolCallCard(
                         else -> Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .alpha(runningAlpha)
+                                .graphicsLayer { alpha = runningAlpha }
                                 .clip(CircleShape)
                                 .background(statusColor)
                         )
@@ -1368,12 +1377,12 @@ private fun TypingIndicatorBubble() {
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val dots = listOf(dot1 to dot1Alpha, dot2 to dot2Alpha, dot3 to dot3Alpha)
-            for ((offset, alpha) in dots) {
+            for ((dotOffset, dotAlpha) in dots) {
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .offset(y = offset.dp)
-                        .alpha(alpha)
+                        .offset(y = dotOffset.dp)
+                        .graphicsLayer { alpha = dotAlpha }
                         .clip(CircleShape)
                         .background(scheme.onSurfaceVariant)
                 )
