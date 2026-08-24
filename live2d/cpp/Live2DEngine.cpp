@@ -229,9 +229,10 @@ void Live2DEngine::Run()
     csmFloat32 z = fitX < fitY ? fitX : fitY;
     z *= kAvatarZoom;
 
-    // Identity projection: the model matrix below carries the whole
-    // vertex -> logical transform.
+    // Map isotropic logical screen coordinates ([-aspectRatio, aspectRatio] x [-1.0, 1.0])
+    // onto OpenGL Normalized Device Coordinates (NDC: [-1.0, 1.0] x [-1.0, 1.0]).
     CubismMatrix44 projection;
+    projection.Scale(1.0f / aspectRatio, 1.0f);
 
     CubismModelMatrix* modelMatrix = _model->GetModelMatrix();
     modelMatrix->LoadIdentity();
@@ -294,38 +295,23 @@ void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
     const csmFloat32 dy = _lastY - _startY;
     if (sqrtf(dx * dx + dy * dy) < kTapThreshold)
     {
-        // Convert to logical coordinates and run the hit test.
-        const csmFloat32 logicalX = _deviceToScreen->TransformX(_lastX);
-        const csmFloat32 logicalY = _deviceToScreen->TransformY(_lastY);
-        OnTap(logicalX, logicalY);
+        // Convert to view coordinates and run the hit test.
+        const csmFloat32 viewX = TransformViewX(_lastX);
+        const csmFloat32 viewY = TransformViewY(_lastY);
+        OnTap(viewX, viewY);
     }
 }
 
 void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
 {
-    // Inverse of the per-frame model matrix (uniform scale + center offset):
-    //   view = z*(v - c)   ->   v = view/z + c
-    const csmFloat32 cx = _model->GetBoundsCenterX();
-    const csmFloat32 cy = _model->GetBoundsCenterY();
-    const csmFloat32 halfWidth = _model->GetBoundsHalfWidth();
-    const csmFloat32 halfHeight = _model->GetBoundsHalfHeight();
-
-    const csmFloat32 aspectRatio =
-        static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
-    const csmFloat32 fitX = aspectRatio / halfWidth;
-    const csmFloat32 fitY = 1.0f / halfHeight;
-    csmFloat32 z = fitX < fitY ? fitX : fitY;
-    z *= kAvatarZoom;
-
-    const csmFloat32 adjustedX = x / z + cx;
-    const csmFloat32 adjustedY = y / z + cy;
-
-    if (_model->HitTest(HitAreaNameHead, adjustedX, adjustedY))
+    // HitTest calls CubismUserModel::IsHit(), which uses _modelMatrix's inverse
+    // transform to map view coordinates back to model space.
+    if (_model->HitTest(HitAreaNameHead, x, y))
     {
         LAppPal::PrintLogLn("[Engine] hit: %s -> random expression", HitAreaNameHead);
         _model->SetRandomExpression();
     }
-    else if (_model->HitTest(HitAreaNameBody, adjustedX, adjustedY))
+    else if (_model->HitTest(HitAreaNameBody, x, y))
     {
         LAppPal::PrintLogLn("[Engine] hit: %s -> random motion", HitAreaNameBody);
         if (_model->HasMotionGroup(MotionGroupTapBody))
