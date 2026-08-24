@@ -210,40 +210,29 @@ void Live2DEngine::Run()
         return;
     }
 
-    // Rebuild the model matrix absolutely every frame. The SDK's
-    // CubismModelMatrix setters are incremental (they multiply/translate the
-    // current matrix), so per-frame relative calls would accumulate drift.
-    //
-    // Canvas space is [0..W]x[0..H] with Y pointing down; map it so that:
-    //   - the canvas center lands on the logical origin (centered),
-    //   - Y is flipped upright,
-    //   - the larger dimension fits the logical screen, scaled by kAvatarZoom.
-    const csmFloat32 canvasWidth =
-        _model->GetModel()->GetCanvasWidth();
-    const csmFloat32 canvasHeight =
-        _model->GetModel()->GetCanvasHeight();
+    // Fit the model into the view (port of the official sample's
+    // LAppLive2DManager::OnUpdate). The model matrix carries the centering
+    // applied once at load time; the projection is rebuilt fresh each frame,
+    // so the relative zoom below cannot accumulate.
+    const csmFloat32 aspectRatio = static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
+    const csmFloat32 displayRatio = static_cast<csmFloat32>(_height) / static_cast<csmFloat32>(_width);
+    const csmFloat32 canvasRatio =
+        _model->GetModel()->GetCanvasHeight() / _model->GetModel()->GetCanvasWidth();
 
-    // The view/projection stays identity: the model matrix below carries the
-    // full canvas->logical transform (fit, center, flip, zoom).
     CubismMatrix44 projection;
-
-    const csmFloat32 aspectRatio =
-        static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
-    const csmFloat32 logicalWidth = 2.0f * aspectRatio; // screen: X in [-r, r]
-    const csmFloat32 logicalHeight = 2.0f;              //           Y in [-1, 1]
-    const csmFloat32 fitWidth = logicalWidth / canvasWidth;
-    const csmFloat32 fitHeight = logicalHeight / canvasHeight;
-    csmFloat32 scale = fitWidth < fitHeight ? fitWidth : fitHeight;
-    scale *= kAvatarZoom;
-
-    CubismModelMatrix* modelMatrix = _model->GetModelMatrix();
-    modelMatrix->LoadIdentity();
-    modelMatrix->Scale(scale, -scale);
-    modelMatrix->TranslateRelative(
-        -scale * canvasWidth * 0.5f,
-        scale * canvasHeight * 0.5f
-    );
-
+    if (canvasRatio < displayRatio)
+    {
+        // Wide model on a tall screen: fit the width, adjust vertically.
+        _model->GetModelMatrix()->SetWidth(2.0f);
+        projection.Scale(1.0f, aspectRatio);
+    }
+    else
+    {
+        // Tall model: fit the height, adjust horizontally.
+        _model->GetModelMatrix()->SetHeight(2.0f);
+        projection.Scale(1.0f / aspectRatio, 1.0f);
+    }
+    projection.ScaleRelative(kAvatarZoom, kAvatarZoom);
     projection.MultiplyByMatrix(_viewMatrix);
 
     _model->Update();
@@ -309,21 +298,20 @@ void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
 
 void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
 {
-    // Convert view-space coordinates into canvas space using the exact
-    // inverse of the per-frame model matrix built in Run():
-    //   view.x = z*canvasX - z*W/2      ->  canvasX =  view.x / z + W/2
-    //   view.y = -z*canvasY + z*H/2     ->  canvasY = H/2 - view.y / z
-    const csmFloat32 canvasWidth = _model->GetModel()->GetCanvasWidth();
-    const csmFloat32 canvasHeight = _model->GetModel()->GetCanvasHeight();
-    const csmFloat32 logicalWidth =
-        2.0f * (static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height));
-    const csmFloat32 fitWidth = logicalWidth / canvasWidth;
-    const csmFloat32 fitHeight = 2.0f / canvasHeight;
-    csmFloat32 z = fitWidth < fitHeight ? fitWidth : fitHeight;
-    z *= kAvatarZoom;
+    const csmFloat32 aspectRatio = static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
+    const csmFloat32 displayRatio = static_cast<csmFloat32>(_height) / static_cast<csmFloat32>(_width);
+    const csmFloat32 canvasRatio =
+        _model->GetModel()->GetCanvasHeight() / _model->GetModel()->GetCanvasWidth();
 
-    const csmFloat32 adjustedX = x / z + canvasWidth * 0.5f;
-    const csmFloat32 adjustedY = canvasHeight * 0.5f - y / z;
+    // Compensate the projection scaling so the tap maps onto model space
+    // (same math as the official sample).
+    csmFloat32 adjustedX = x;
+    csmFloat32 adjustedY = y;
+    if (canvasRatio < displayRatio)
+    {
+        adjustedX = x / aspectRatio;
+        adjustedY = y / aspectRatio;
+    }
 
     if (_model->HitTest(HitAreaNameHead, adjustedX, adjustedY))
     {

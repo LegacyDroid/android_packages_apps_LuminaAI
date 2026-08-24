@@ -235,6 +235,12 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
     csmMap<csmString, csmFloat32> layout;
     _modelSetting->GetLayoutMap(layout);
     _modelMatrix->SetupFromLayout(layout);
+    // IceGirl's model3.json has no Layout block, so the canvas stays anchored
+    // top-left (Y-down) after SetupFromLayout. Center it on the logical
+    // origin once here - per-frame centering would accumulate drift because
+    // CubismModelMatrix setters are incremental.
+    _modelMatrix->CenterX(0.0f);
+    _modelMatrix->CenterY(0.0f);
     _model->SaveParameters();
 
     // --- Motions -------------------------------------------------------------------
