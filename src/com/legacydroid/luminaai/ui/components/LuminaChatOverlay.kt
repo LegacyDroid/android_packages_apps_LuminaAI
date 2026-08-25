@@ -87,7 +87,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -196,8 +195,9 @@ fun LuminaChatOverlay(
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .imePadding()
     ) {
+        // no imePadding here on purpose, the avatar layer must not see the
+        // keyboard or its surface resizes and the model jumps
         val totalHeight = maxHeight
         val orbTopOffset = totalHeight * 0.32f
 
@@ -221,20 +221,15 @@ fun LuminaChatOverlay(
             animationSpec = tween(600, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
             label = "modelReveal"
         )
-        // idle shows the full render, chat clips it down to the head. The GL
-        // surface never resizes, we just crop it, so nothing gets re-inited.
-        val avatarHeight by animateDpAsState(
-            targetValue = if (conversationActive) totalHeight * 0.34f else totalHeight,
-            animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
-            label = "avatarHeight"
-        )
+        // the model always renders fullscreen and never moves or crops, the
+        // chat just draws over it. The GL surface keeps its size so there is
+        // no re-init churn.
         if (Live2DController.available) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .height(avatarHeight)
-                    .clipToBounds()
+                    .height(totalHeight)
                     .graphicsLayer {
                         alpha = introStage(introProgress.value, 0.45f, 0.85f) * modelReveal
                     }
@@ -381,6 +376,7 @@ fun LuminaChatOverlay(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .imePadding()
                 .padding(horizontal = 14.dp, vertical = 20.dp)
                 .graphicsLayer {
                     val p = introStage(introProgress.value, 0.15f, 0.6f)
@@ -393,6 +389,7 @@ fun LuminaChatOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f, fill = false)
                     .heightIn(max = messagesMaxHeight)
                     .padding(bottom = 10.dp)
             ) {
