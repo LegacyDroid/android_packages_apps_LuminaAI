@@ -9,6 +9,7 @@
  * any thread, a mutex guards the model.
  */
 
+#include <atomic>
 #include <mutex>
 
 #include <CubismFramework.hpp>
@@ -73,10 +74,16 @@ private:
     Csm::csmInt32 _width;                    // surface width in px
     Csm::csmInt32 _height;                   // surface height in px
 
-    // touch state, device coordinates
-    bool _touchStarted;
-    Csm::csmFloat32 _startX, _startY;        // where the touch began
-    Csm::csmFloat32 _lastX, _lastY;          // latest touch position
+    // touch state, device coordinates. Written lock-free from the UI
+    // thread, consumed once per frame on the GL thread so touch events
+    // never wait on the frame mutex.
+    std::atomic<bool> _touchDown;
+    std::atomic<bool> _tapPending;
+    std::atomic<Csm::csmFloat32> _startX;    // where the touch began
+    std::atomic<Csm::csmFloat32> _startY;
+    std::atomic<Csm::csmFloat32> _lastX;     // latest touch position
+    std::atomic<Csm::csmFloat32> _lastY;
+    bool _dragging;                          // GL thread only
 
     mutable std::mutex _mutex;               // guards the model
 };

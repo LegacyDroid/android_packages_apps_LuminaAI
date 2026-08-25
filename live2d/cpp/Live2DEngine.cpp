@@ -66,11 +66,13 @@ Live2DEngine::Live2DEngine()
     , _viewMatrix(new CubismViewMatrix())
     , _width(1080)
     , _height(1920)
-    , _touchStarted(false)
+    , _touchDown(false)
+    , _tapPending(false)
     , _startX(0.0f)
     , _startY(0.0f)
     , _lastX(0.0f)
     , _lastY(0.0f)
+    , _dragging(false)
 {
     // logging and file loading both go through LAppPal
     _cubismOption.LogFunction = LAppPal::PrintMessageLn;
@@ -203,6 +205,38 @@ void Live2DEngine::Run()
         return;
     }
 
+    // consume the touch state the ui thread wrote. drag follows the latest
+    // sampled position and a short low movement release counts as a tap,
+    // all handled here so touch events never block on this mutex.
+    const bool down = _touchDown.load();
+    const csmFloat32 lastX = _lastX.load();
+    const csmFloat32 lastY = _lastY.load();
+
+    if (down)
+    {
+        _dragging = true;
+        _model->SetDragging(TransformViewX(lastX), TransformViewY(lastY));
+    }
+    else
+    {
+        if (_dragging)
+        {
+            _dragging = false;
+            _model->SetDragging(0.0f, 0.0f);
+        }
+        if (_tapPending.exchange(false))
+        {
+            const csmFloat32 startX = _startX.load();
+            const csmFloat32 startY = _startY.load();
+            const csmFloat32 dx = lastX - startX;
+            const csmFloat32 dy = lastY - startY;
+            if (sqrtf(dx * dx + dy * dy) < kTapThreshold)
+            {
+                OnTap(TransformViewX(lastX), TransformViewY(lastY));
+            }
+        }
+    }
+
     // fit the model from its measured vertex bounds instead of assuming a
     // coordinate convention. Scale so both half extents land inside the
     // logical screen, then apply the extra zoom.
@@ -235,56 +269,27 @@ void Live2DEngine::Run()
 
 void Live2DEngine::OnTouchesBegan(csmFloat32 x, csmFloat32 y)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-
-    _startX = x;
-    _startY = y;
-    _lastX = x;
-    _lastY = y;
-    _touchStarted = true;
+    // lock free on purpose, the ui thread must never wait for a frame
+    _startX.store(x);
+    _startY.store(y);
+    _lastX.store(x);
+    _lastY.store(y);
+    _touchDown.store(true);
+    _tapPending.store(false);
 }
 
 void Live2DEngine::OnTouchesMoved(csmFloat32 x, csmFloat32 y)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-
-    if (!_touchStarted || _model == nullptr)
-    {
-        return;
-    }
-
-    // feed the drag manager so the head follows the finger
-    const csmFloat32 viewX = TransformViewX(_lastX);
-    const csmFloat32 viewY = TransformViewY(_lastY);
-    _lastX = x;
-    _lastY = y;
-    _model->SetDragging(viewX, viewY);
+    _lastX.store(x);
+    _lastY.store(y);
 }
 
 void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-
-    _lastX = x;
-    _lastY = y;
-    _touchStarted = false;
-
-    if (_model == nullptr)
-    {
-        return;
-    }
-
-    _model->SetDragging(0.0f, 0.0f);
-
-    // short touch with barely any movement, treat it as a tap
-    const csmFloat32 dx = _lastX - _startX;
-    const csmFloat32 dy = _lastY - _startY;
-    if (sqrtf(dx * dx + dy * dy) < kTapThreshold)
-    {
-        const csmFloat32 viewX = TransformViewX(_lastX);
-        const csmFloat32 viewY = TransformViewY(_lastY);
-        OnTap(viewX, viewY);
-    }
+    _lastX.store(x);
+    _lastY.store(y);
+    _touchDown.store(false);
+    _tapPending.store(true);
 }
 
 void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)

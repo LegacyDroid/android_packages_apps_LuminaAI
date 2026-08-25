@@ -178,7 +178,7 @@ private class RenderThread(
 
                 val now = System.currentTimeMillis()
                 val wait = frameMillis - (now - lastFrame)
-                if (wait > 0) sleep(wait)
+                if (wait > 0) sleep(wait) else sleep(1) // frame overran, never spin hot
                 lastFrame = System.currentTimeMillis()
             }
         }

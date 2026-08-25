@@ -10,6 +10,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <sys/resource.h>
+
 #include "LAppPal.hpp"
 #include "JniBridgeC.hpp"
 
@@ -71,6 +73,10 @@ LAppTextureManager::DecodedImage LAppTextureManager::DecodePngFile(const std::st
 {
     DecodedImage result;
     result.fileName = fileName;
+
+    // runs on async decode workers, keep them from starving the ui thread
+    // while the model loads
+    setpriority(PRIO_PROCESS, 0, 10);
 
     // reading the file is the slow part on big textures
     const double startTime = LAppPal::GetSystemTime();
