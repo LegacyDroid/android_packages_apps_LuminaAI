@@ -115,11 +115,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.random.Random
 
-/**
- * The awakened Lumina overlay: orb + label, chat stack (message blocks,
- * tool cards, memory chips), suggestion chips, pill input, and the memories
- * bottom sheet.
- */
+// Main overlay UI. Chat stack, suggestion chips, input and the memories sheet.
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LuminaChatOverlay(
@@ -205,8 +201,8 @@ fun LuminaChatOverlay(
         val totalHeight = maxHeight
         val orbTopOffset = totalHeight * 0.32f
 
-        // Conversation mode starts when the USER sends a message - the
-        // auto-greeting alone keeps the fullscreen hero avatar visible.
+        // chat mode starts at the first user message, the greeting alone
+        // keeps the full size avatar visible
         val conversationActive = messages.any { it.role == Role.USER }
         val heroCollapse by animateFloatAsState(
             targetValue = if (conversationActive) 0f else 1f,
@@ -219,18 +215,14 @@ fun LuminaChatOverlay(
             label = "messagesHeight"
         )
 
-        // Lumi-chan reveal: the orb/logo stays until the Live2D model finished
-        // loading, then the model fades in underneath the chat and the orb
-        // fades out (design: "logo hide = model appear").
+        // the orb stays up until the model finished loading, then they swap
         val modelReveal by animateFloatAsState(
             targetValue = if (Live2DController.available && Live2DController.loaded) 1f else 0f,
             animationSpec = tween(600, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
             label = "modelReveal"
         )
-        // Idle: full-screen viewport - identical framing/centering to the demo.
-        // Conversation: the container clips to a top strip, showing the head +
-        // shoulders of the SAME fullscreen render (the GL surface never
-        // resizes, so there is no re-init churn and no fit distortion).
+        // idle shows the full render, chat clips it down to the head. The GL
+        // surface never resizes, we just crop it, so nothing gets re-inited.
         val avatarHeight by animateDpAsState(
             targetValue = if (conversationActive) totalHeight * 0.34f else totalHeight,
             animationSpec = tween(500, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),

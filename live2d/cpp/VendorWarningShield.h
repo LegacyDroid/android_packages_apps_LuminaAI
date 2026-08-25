@@ -6,19 +6,12 @@
 #pragma once
 
 /*
- * Forced-include warning shield for the vendored Cubism SDK sources.
+ * Force included for the vendored Cubism sources only.
  *
- * The ROM tree compiles cc modules with a global -Werror that is appended
- * AFTER module cflags, so -Wno-* / -Wno-everything on Android.bp lose the
- * ordering battle and upstream warnings (unused parameters in CubismJson.hpp,
- * ctor init order, ignored qualifiers, ...) become hard errors.
- *
- * A pragma inside a force-included header is evaluated with the translation
- * unit, i.e. AFTER all command-line flags, so this reliably downgrades every
- * diagnostic for vendored code regardless of product configuration.
- *
- * Applied only to the Cubism framework/engine modules - application Kotlin
- * and other native code keep normal diagnostics.
+ * The ROM build appends a global -Werror after the module cflags, so -Wno
+ * flags in Android.bp never win and upstream warnings turn into errors.
+ * Pragmas in this header are evaluated with the translation unit, after all
+ * command line flags, so they reliably silence everything here.
  */
 
 #pragma GCC diagnostic ignored "-Weverything"

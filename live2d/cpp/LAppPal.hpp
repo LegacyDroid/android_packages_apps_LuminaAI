@@ -1,14 +1,10 @@
 #pragma once
 
-/**
- * @file LAppPal.hpp
+/*
+ * LAppPal.hpp
  *
- * Platform abstraction layer (Android port of the official Cubism sample):
- *
- *  - LoadFileAsBytes(): reads an asset, transparently decrypting AES-128-CTR
- *    encrypted ".enc" files (see .cpp for the decryption details).
- *  - UpdateTime()/GetDeltaTime(): frame timing via CLOCK_MONOTONIC.
- *  - PrintLog*(): logs to logcat.
+ * Platform layer, Android port of the Cubism sample. Asset loading, frame
+ * timing and logcat logging.
  */
 
 #include <CubismFramework.hpp>
@@ -18,33 +14,31 @@ class LAppPal
 {
 public:
     /**
-     * Loads `filePath` as raw bytes from the APK assets (plaintext - the
-     * IceGirl model ships unencrypted; see live2d/LICENSE-NOTES.md).
-     *
-     * @return heap-allocated buffer (release with ReleaseBytes) or nullptr
+     * Loads a file from the APK assets as raw bytes. Returns a heap buffer
+     * the caller releases with ReleaseBytes, or null.
      */
     static Csm::csmByte* LoadFileAsBytes(const std::string filePath, Csm::csmSizeInt* outSize);
 
-    /** Frees a buffer returned by LoadFileAsBytes. */
+    /** Frees a buffer from LoadFileAsBytes. */
     static void ReleaseBytes(Csm::csmByte* byteData);
 
-    /** Delta seconds since the previous UpdateTime() call. */
+    /** Seconds since the previous UpdateTime call. */
     static Csm::csmFloat32 GetDeltaTime();
 
-    /** Call once per rendered frame. */
+    /** Call once per frame. */
     static void UpdateTime();
 
-    // --- Logging ------------------------------------------------------------
+    // logging
     static void PrintLog(const Csm::csmChar* format, ...);
     static void PrintLogLn(const Csm::csmChar* format, ...);
     static void PrintMessage(const Csm::csmChar* message);
     static void PrintMessageLn(const Csm::csmChar* message);
 
-    /** Monotonic clock seconds (used by UpdateTime). */
+    /** Monotonic clock in seconds. */
     static double GetSystemTime();
 
 private:
-    static double s_currentFrame; ///< time of the current frame [s]
-    static double s_lastFrame;    ///< time of the previous frame [s]
-    static double s_deltaTime;    ///< frame delta [s]
+    static double s_currentFrame; // current frame time
+    static double s_lastFrame;    // previous frame time
+    static double s_deltaTime;    // frame delta
 };

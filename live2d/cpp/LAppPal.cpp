@@ -1,10 +1,7 @@
-/**
+/*
  * Android port of the Cubism sample's LAppPal.
- *
- * LoadFileAsBytes() reads model files (moc3, textures, expressions, motions,
- * physics, ...) straight from the APK assets via the Kotlin bridge. Assets
- * are shipped as plaintext: the model is a free Booth download whose terms
- * do not require protection, so no encryption layer exists here.
+ * LoadFileAsBytes reads model files from the APK assets through the Kotlin
+ * bridge. The bundled model ships unencrypted so there is no crypto here.
  */
 
 #include "LAppPal.hpp"

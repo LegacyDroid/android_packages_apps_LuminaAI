@@ -1,11 +1,10 @@
 #pragma once
 
-/**
- * @file LAppDefine.hpp
+/*
+ * LAppDefine.hpp
  *
- * App-wide constants: view configuration, motion groups, hit areas and
- * priorities. Values mirror the official Cubism sample (LAppDefine) so the
- * behaviour of the model (motion groups, tap handling) stays consistent.
+ * App wide constants, values match the Cubism sample so model behaviour
+ * stays consistent.
  */
 
 #include <CubismFramework.hpp>
@@ -17,39 +16,39 @@ using Csm::csmChar;
 using Csm::csmFloat32;
 using Csm::csmInt32;
 
-// --- View configuration ----------------------------------------------------
-extern const csmFloat32 ViewScale;      ///< default zoom
-extern const csmFloat32 ViewMaxScale;   ///< max zoom
-extern const csmFloat32 ViewMinScale;   ///< min zoom
+// view
+extern const csmFloat32 ViewScale;      // default zoom
+extern const csmFloat32 ViewMaxScale;   // max zoom
+extern const csmFloat32 ViewMinScale;   // min zoom
 
-// Logical screen bounds (device is mapped onto these).
+// logical screen bounds the device is mapped onto
 extern const csmFloat32 ViewLogicalLeft;
 extern const csmFloat32 ViewLogicalRight;
 extern const csmFloat32 ViewLogicalBottom;
 extern const csmFloat32 ViewLogicalTop;
 
-// Maximum pannable bounds of the logical screen.
+// how far the logical screen can pan
 extern const csmFloat32 ViewLogicalMaxLeft;
 extern const csmFloat32 ViewLogicalMaxRight;
 extern const csmFloat32 ViewLogicalMaxBottom;
 extern const csmFloat32 ViewLogicalMaxTop;
 
-// --- Motion groups (must match the keys inside the model's *.model3.json) ---
-extern const csmChar* MotionGroupIdle;     ///< played automatically when no motion runs
-extern const csmChar* MotionGroupTapBody;  ///< played when the body is tapped
+// motion groups, must match the model json
+extern const csmChar* MotionGroupIdle;     // plays when nothing else runs
+extern const csmChar* MotionGroupTapBody;  // plays when the body is tapped
 
-// --- Hit areas (must match the model's HitAreas[].Name) ----------------------
-extern const csmChar* HitAreaNameHead;     ///< tapping the head triggers a random expression
-extern const csmChar* HitAreaNameBody;     ///< tapping the body triggers a motion
+// hit areas, must match the model
+extern const csmChar* HitAreaNameHead;     // head tap, random expression
+extern const csmChar* HitAreaNameBody;     // body tap, motion
 
-// --- Motion priority ---------------------------------------------------------
-extern const csmInt32 PriorityNone;    ///< 0: cannot interrupt
-extern const csmInt32 PriorityIdle;    ///< 1: idle motions
-extern const csmInt32 PriorityNormal;  ///< 2: normal motions
-extern const csmInt32 PriorityForce;   ///< 3: force (interrupts everything)
+// motion priority
+extern const csmInt32 PriorityNone;    // cannot interrupt
+extern const csmInt32 PriorityIdle;    // idle motions
+extern const csmInt32 PriorityNormal;  // normal motions
+extern const csmInt32 PriorityForce;   // interrupts everything
 
-// --- Logging ------------------------------------------------------------------
-extern const csmBool DebugLogEnable;                            ///< app logs
-extern const Csm::CubismFramework::Option::LogLevel CubismLoggingLevel; ///< framework logs
+// logging
+extern const csmBool DebugLogEnable;                            // app logs
+extern const Csm::CubismFramework::Option::LogLevel CubismLoggingLevel; // framework logs
 
 } // namespace LAppDefine

@@ -9,17 +9,14 @@ import android.content.res.AssetManager
 import java.io.IOException
 
 /**
- * Bridge between Kotlin and the native library (libluminalive2d.so).
- *
- * The native side calls the static [loadFile] / [getAssetList] functions to
- * read the APK assets (model files + Cubism shaders), and Kotlin calls the
- * `native*` functions to drive the render engine.
+ * Kotlin side of the JNI bridge to libluminalive2d. The native engine reads
+ * APK assets through the loadFile and getAssetList functions here.
  */
 object Live2DBridge {
 
     private var assetManager: AssetManager? = null
 
-    /** Must be called once before any native use (from LuminaApp.onCreate). */
+    /** Call once before any native use. */
     fun initialize(context: Context) {
         assetManager = context.assets
     }
@@ -31,7 +28,7 @@ object Live2DBridge {
         return p
     }
 
-    /** Reads an asset file as raw bytes; null when missing or unsafe. */
+    /** Reads an asset file, null if missing or unsafe. */
     @JvmStatic
     fun loadFile(path: String): ByteArray? {
         val assets = assetManager ?: return null
@@ -45,8 +42,9 @@ object Live2DBridge {
     }
 
     /**
-     * Lists an asset directory ("" = root - the native side auto-discovers
-     * expressions/motions there). Directory entries have a trailing '/'.
+     * Lists an asset directory. Empty path means the assets root, where the
+     * native side discovers expressions and motions. Directory entries end
+     * with a slash.
      */
     @JvmStatic
     fun getAssetList(path: String): Array<String> {
@@ -58,7 +56,7 @@ object Live2DBridge {
         return assets.list(safe) ?: emptyArray()
     }
 
-    // --- Native render engine ------------------------------------------------
+    // native render engine entry points
 
     external fun nativeOnSurfaceCreated()
     external fun nativeOnSurfaceChanged(width: Int, height: Int)
@@ -68,16 +66,16 @@ object Live2DBridge {
     external fun nativeOnTouchesEnded(x: Float, y: Float)
     external fun nativeOnStop()
 
-    /** True once the model is fully loaded on the GL thread. */
+    /** True once the model is loaded on the GL thread. */
     external fun nativeIsModelLoaded(): Boolean
 
-    // Expressions (Add-blended, stackable).
+    // expressions, add blended and stackable
     external fun nativeGetExpressionCount(): Int
     external fun nativeGetExpressionName(index: Int): String?
     external fun nativeSetExpression(index: Int)
     external fun nativeClearExpressions()
 
-    // Motion groups.
+    // motion groups
     external fun nativeGetMotionGroupCount(): Int
     external fun nativeGetMotionGroupName(index: Int): String?
     external fun nativePlayMotionGroup(index: Int)

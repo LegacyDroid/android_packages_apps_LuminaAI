@@ -38,10 +38,8 @@ class LuminaApp : Application() {
         scheduleListenerRecheck()
     }
 
-    // A raw secure-settings write with an unchanged value produces no change
-    // notification, so NotificationManagerService may skip adoption. Re-run the
-    // grant once the permission state has settled; if access is already live
-    // this is a no-op.
+    // the system can ignore a settings write when the value did not change,
+    // so retry the grant once things settled. Noop if access is already live.
     private fun scheduleListenerRecheck() {
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             if (!NotificationHub.enabled) {

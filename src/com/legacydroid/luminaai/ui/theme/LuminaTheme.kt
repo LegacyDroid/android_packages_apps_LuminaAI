@@ -12,10 +12,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-/**
- * Android Material color scheme: Material You dynamic colors (wallpaper-based)
- * on S+, plain dark scheme elsewhere. The overlay is always dark.
- */
+// Wallpaper colors on Android 12 and up, plain dark below that.
+// The overlay is always dark either way.
 @Composable
 fun LuminaColorScheme() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
     dynamicDarkColorScheme(LocalContext.current)

@@ -1,11 +1,10 @@
 #pragma once
 
-/**
- * @file LAppAllocator.hpp
+/*
+ * LAppAllocator.hpp
  *
- * Memory allocator handed to CubismFramework::StartUp. Simple malloc/free
- * wrapper with aligned allocation support (aligned pointers store the base
- * pointer one slot before the aligned address).
+ * Allocator handed to CubismFramework::StartUp. Plain malloc and free with
+ * aligned allocation on top.
  */
 
 #include <CubismFramework.hpp>

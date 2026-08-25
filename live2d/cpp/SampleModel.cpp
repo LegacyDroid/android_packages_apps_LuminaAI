@@ -1,10 +1,7 @@
-/**
- * Single-model wrapper around CubismUserModel.
- *
- * Based on the official sample's CubismUserModelExtend (Minimum demo) plus the
- * expression/motion/hit-test parts of LAppModel, with one important addition:
- * for models whose *.model3.json does not declare Expressions/Motions
- * (e.g. IceGirl) the files are auto-discovered from the model directory.
+/*
+ * Single model wrapper around CubismUserModel.
+ * Based on the official sample, with the addition that expressions and
+ * motions missing from the model json are discovered from the directory.
  */
 
 #include "SampleModel.hpp"
@@ -42,21 +39,19 @@ using namespace LAppDefine;
 
 namespace {
 
-/** Sorts asset name lists so discovery order is deterministic. */
+// qsort comparator so discovery order is stable
 int CompareCsmString(const void* a, const void* b)
 {
     return strcmp(reinterpret_cast<const csmString*>(a)->GetRawString(),
                   reinterpret_cast<const csmString*>(b)->GetRawString());
 }
 
-/** True when `name` ends with `suffix`. */
 bool EndsWith(const std::string& name, const std::string& suffix)
 {
     return name.size() >= suffix.size() &&
            name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
-/** Strips a suffix from an asset entry name. */
 std::string StripSuffix(const std::string& name, const std::string& suffix)
 {
     return name.substr(0, name.size() - suffix.size());
@@ -72,7 +67,7 @@ SampleModel::SampleModel(const std::string& modelDirectory)
     , _userTimeSeconds(0.0f)
     , _motionUpdated(false)
 {
-    // Parameter ids for the look updater (drag -> head/eyes).
+    // parameter ids the look updater needs
     _idParamAngleX = CubismFramework::GetIdManager()->GetId(ParamAngleX);
     _idParamAngleY = CubismFramework::GetIdManager()->GetId(ParamAngleY);
     _idParamAngleZ = CubismFramework::GetIdManager()->GetId(ParamAngleZ);
@@ -108,7 +103,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
     csmByte* buffer = nullptr;
     csmSizeInt size = 0;
 
-    // --- Cubism model (.moc3) ------------------------------------------------
+    // the moc3 model itself
     if (strcmp(_modelSetting->GetModelFileName(), "") != 0)
     {
         std::string path = _modelDirectory + _modelSetting->GetModelFileName();
@@ -117,8 +112,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
         LAppPal::ReleaseBytes(buffer);
     }
 
-    // --- Expressions ----------------------------------------------------------
-    // 1) The ones declared in *.model3.json ...
+    // expressions declared in the model json
     for (csmInt32 i = 0; i < _modelSetting->GetExpressionCount(); i++)
     {
         const csmString name = _modelSetting->GetExpressionName(i);
@@ -138,8 +132,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
             _expressionNames.PushBack(name);
         }
     }
-    // 2) ... plus any *.exp3.json found next to the model (IceGirl keeps its
-    //    expressions undeclared in the json).
+    // then anything else sitting next to the model, IceGirl declares none
     DiscoverExpressions();
     if (_expressionNames.GetSize() > 0)
     {
@@ -147,7 +140,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
         _updateScheduler.AddUpdatableList(expression);
     }
 
-    // --- Pose / physics / user data ---------------------------------------------
+    // pose, physics, user data
     if (strcmp(_modelSetting->GetPoseFileName(), "") != 0)
     {
         std::string path = _modelDirectory + _modelSetting->GetPoseFileName();
@@ -182,9 +175,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
         LAppPal::ReleaseBytes(buffer);
     }
 
-    // --- Eye blink ---------------------------------------------------------------
-    // Uses the ids from the json when present; falls back to the standard
-    // ParamEyeLOpen/ParamEyeROpen when the model has those parameters.
+    // eye blink, uses json ids when present and standard eye params otherwise
     {
         csmVector<CubismIdHandle> blinkIds;
         for (csmInt32 i = 0; i < _modelSetting->GetEyeBlinkParameterCount(); i++)
@@ -195,8 +186,8 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
         {
             CubismIdHandle l = CubismFramework::GetIdManager()->GetId(ParamEyeLOpen);
             CubismIdHandle r = CubismFramework::GetIdManager()->GetId(ParamEyeROpen);
-            // The framework has no IsExistParameterId(); a parameter "exists"
-            // when its index is within the real (non-virtual) parameter range.
+            // no IsExistParameterId in the framework, a parameter exists
+            // when its index lands inside the real parameter count
             if (_model->GetParameterIndex(l) < _model->GetParameterCount() &&
                 _model->GetParameterIndex(r) < _model->GetParameterCount())
             {
@@ -213,7 +204,7 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
         }
     }
 
-    // --- Look (head / eyes follow the drag) ---------------------------------------
+    // look, head and eyes follow the drag
     {
         _look = CubismLook::Create();
         csmVector<CubismLook::LookParameterData> lookParameters;
@@ -231,23 +222,23 @@ void SampleModel::SetupModel(csmUint32 renderWidth, csmUint32 renderHeight)
 
     _updateScheduler.SortUpdatableList();
 
-    // --- Layout from *.model3.json ------------------------------------------------
+    // layout values from the model json
     csmMap<csmString, csmFloat32> layout;
     _modelSetting->GetLayoutMap(layout);
     _modelMatrix->SetupFromLayout(layout);
     _model->SaveParameters();
 
-    // --- Motions -------------------------------------------------------------------
+    // preload all motion groups
     for (csmInt32 i = 0; i < _modelSetting->GetMotionGroupCount(); i++)
     {
         const csmChar* group = _modelSetting->GetMotionGroupName(i);
         _motionGroupNames.PushBack(csmString(group));
         PreloadMotionGroup(group);
     }
-    DiscoverMotions(); // json did not declare any group (IceGirl case)
+    DiscoverMotions(); // nothing declared, IceGirl case
     _motionManager->StopAllMotions();
 
-    // --- Renderer + textures ---------------------------------------------------------
+    // renderer and textures
     CreateRenderer(renderWidth, renderHeight);
     SetupTextures();
     MeasureBounds();
@@ -264,12 +255,12 @@ void SampleModel::DiscoverExpressions()
     for (csmUint32 i = 0; i < entries.GetSize(); i++)
     {
         const std::string entry(entries[i].GetRawString());
-        // Skip directories (trailing '/') and files inside sub-directories.
+        // skip directories and anything inside sub-directories
         if (entry.empty() || entry.back() == '/')
         {
             continue;
         }
-        // Match "xxx.exp3.json" (plain) or "xxx.exp3.json.enc" (encrypted).
+        // matches exp3 json files, encrypted or not
         std::string name;
         std::string asset;
         if (EndsWith(entry, ".exp3.json.enc"))
@@ -289,7 +280,7 @@ void SampleModel::DiscoverExpressions()
 
         if (_expressions.IsExist(csmString(name.c_str())))
         {
-            continue; // already loaded from the json
+            continue; // already came from the json
         }
 
         csmSizeInt size = 0;
@@ -316,8 +307,7 @@ void SampleModel::DiscoverMotions()
         {
             continue;
         }
-        // Match "xxx.motion3.json" / "xxx.motion3.json.enc"; the group name is
-        // the file name without the suffix (e.g. "DaiJi", "HuiShou").
+        // motion3 json files, group name comes from the file name
         std::string asset;
         std::string groupName;
         if (EndsWith(entry, ".motion3.json.enc"))
@@ -335,7 +325,7 @@ void SampleModel::DiscoverMotions()
             continue;
         }
 
-        // Reuse a group that was already declared in the json.
+        // reuse a group the json already declared
         bool knownGroup = false;
         for (csmUint32 g = 0; g < _motionGroupNames.GetSize(); g++)
         {
@@ -443,7 +433,7 @@ Csm::CubismMotionQueueEntryHandle SampleModel::StartMotion(const csmChar* group,
 
     if (motion == nullptr)
     {
-        // Lazily load when the preload did not include it.
+        // not preloaded, load it now
         std::string path = _modelDirectory + _modelSetting->GetMotionFileName(group, no);
         csmByte* buffer = nullptr;
         csmSizeInt size = 0;
@@ -453,7 +443,7 @@ Csm::CubismMotionQueueEntryHandle SampleModel::StartMotion(const csmChar* group,
         LAppPal::ReleaseBytes(buffer);
         if (motion != nullptr)
         {
-            autoDelete = true; // freed by the motion manager when finished
+            autoDelete = true; // motion manager frees it when done
         }
     }
 
@@ -503,7 +493,7 @@ const csmChar* SampleModel::GetIdleGroupName() const
             return _motionGroupNames[i].GetRawString();
         }
     }
-    // Fallback: first available group (IceGirl's "DaiJi" is a standby motion).
+    // no Idle group, use whatever exists
     return _motionGroupNames.GetSize() > 0 ? _motionGroupNames[0].GetRawString() : nullptr;
 }
 
@@ -555,8 +545,7 @@ void SampleModel::MeasureBounds()
     const csmInt32 drawableCount = _model->GetDrawableCount();
     for (csmInt32 i = 0; i < drawableCount; ++i)
     {
-        // Skip invisible drawables so accessories hidden by default do not
-        // skew the framing.
+        // skip invisible drawables so hidden accessories do not skew the frame
         if (_model->GetDrawableOpacity(i) <= 0.0f)
         {
             continue;
@@ -664,12 +653,12 @@ void SampleModel::Update()
 
     _motionUpdated = false;
 
-    // Restore parameters saved at the end of the previous frame.
+    // restore what we saved last frame
     _model->LoadParameters();
 
     if (_motionManager->IsFinished())
     {
-        // No motion playing -> start the idle motion (or the fallback group).
+        // nothing playing, start the idle motion
         const csmChar* idleGroup = GetIdleGroupName();
         if (idleGroup != nullptr)
         {
@@ -683,10 +672,10 @@ void SampleModel::Update()
 
     _model->SaveParameters();
 
-    // Eye blink / look / physics / pose / expression updaters.
+    // blink, look, physics, pose and expression updaters
     _updateScheduler.OnLateUpdate(_model, deltaTimeSeconds);
 
-    // Commit the parameter changes.
+    // apply the parameter changes
     _model->Update();
 }
 
@@ -697,7 +686,7 @@ void SampleModel::Draw(Csm::CubismMatrix44& matrix)
         return;
     }
 
-    // Begin the offscreen (mask) frame processing.
+    // offscreen mask processing for this frame
     Csm::Rendering::CubismOffscreenManager_OpenGLES2::GetInstance()->BeginFrameProcess();
 
     matrix.MultiplyByMatrix(_modelMatrix);
@@ -710,9 +699,8 @@ void SampleModel::Draw(Csm::CubismMatrix44& matrix)
 
 void SampleModel::SetupTextures()
 {
-    // 1) Decode all textures in parallel worker threads. Decryption + PNG
-    //    inflate + downscaling are pure CPU work and dominate the model load
-    //    time, so they run on several cores at once (std::async).
+    // decode every texture on worker threads first, that is the slow part
+    // and parallelizes well
     std::vector<std::future<LAppTextureManager::DecodedImage>> futures;
     for (csmInt32 i = 0; i < _modelSetting->GetTextureCount(); i++)
     {
@@ -727,8 +715,7 @@ void SampleModel::SetupTextures()
         }));
     }
 
-    // 2) Upload the decoded images to the GPU - GL calls must stay on the GL
-    //    thread, so this happens here (after the workers have finished).
+    // then upload on this thread, GL calls must stay here
     csmInt32 modelTextureNumber = 0;
     for (auto& future : futures)
     {

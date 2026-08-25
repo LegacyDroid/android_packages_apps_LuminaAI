@@ -1,13 +1,11 @@
-/**
- * PNG -> OpenGL texture loader (Android port of the Cubism sample).
- *
- * The PNG bytes are read through LAppPal::LoadFileAsBytes, so encrypted
- * ".png.enc" textures are decrypted transparently before decoding.
+/*
+ * PNG to OpenGL texture loader, Android port of the Cubism sample.
+ * PNG bytes come in through LAppPal::LoadFileAsBytes.
  */
 
 #include "LAppTextureManager.hpp"
 
-#define STBI_NO_STDIO // we load from memory only
+#define STBI_NO_STDIO // memory only
 #define STBI_ONLY_PNG
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -17,15 +15,11 @@
 
 namespace {
 
-/** Largest texture dimension kept after downscaling (a phone screen rarely
- *  needs more; IceGirl ships 8192x8192 textures which are very slow to upload
- *  on mid-range GPUs and can even exceed GL_MAX_TEXTURE_SIZE). */
+// textures larger than this get halved, phones do not need more and huge
+// uploads are slow or exceed the GL limit entirely
 const int kMaxTextureSize = 2048;
 
-/**
- * Halves `src` once with a 2x2 box filter (edge pixels are averaged over the
- * available neighbours). Returns the downscaled buffer; the caller frees both.
- */
+// halves src once with a simple 2x2 box filter, caller owns both buffers
 unsigned char* HalveTexture(const unsigned char* src, int w, int h, int* outW, int* outH)
 {
     const int nw = w / 2;
@@ -78,8 +72,7 @@ LAppTextureManager::DecodedImage LAppTextureManager::DecodePngFile(const std::st
     DecodedImage result;
     result.fileName = fileName;
 
-    // Read + decrypt through LAppPal (transparent .enc handling). This is the
-    // expensive part on big textures (IceGirl ships 8192x8192 PNGs).
+    // reading the file is the slow part on big textures
     const double startTime = LAppPal::GetSystemTime();
     Csm::csmSizeInt size = 0;
     unsigned char* png = reinterpret_cast<unsigned char*>(
@@ -87,7 +80,7 @@ LAppTextureManager::DecodedImage LAppTextureManager::DecodePngFile(const std::st
     if (png == nullptr)
     {
         LAppPal::PrintLogLn("[Texture] load failed: %s", fileName.c_str());
-        JniBridgeC::DetachThreadEnv(); // worker threads detach before returning
+        JniBridgeC::DetachThreadEnv(); // worker thread, detach before leaving
         return result;
     }
 
@@ -104,9 +97,8 @@ LAppTextureManager::DecodedImage LAppTextureManager::DecodePngFile(const std::st
         return result;
     }
 
-    // Downscale very large textures (e.g. IceGirl's 8192x8192) with a box
-    // filter so the upload is fast on mobile GPUs. The renderer only needs UV
-    // coverage, so quality loss at 2048 is invisible on a phone screen.
+    // halve oversized textures so the upload stays cheap on mobile GPUs,
+    // the quality loss is invisible at this size
     bool downscaled = false;
     while (width > kMaxTextureSize || height > kMaxTextureSize)
     {
@@ -148,7 +140,7 @@ LAppTextureManager::TextureInfo* LAppTextureManager::CreateTextureFromDecoded(De
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    // The upload is done - the (potentially large) pixel buffer is freed here.
+    // upload done, the pixel buffer can go
     stbi_image_free(image.pixels);
     image.pixels = nullptr;
 

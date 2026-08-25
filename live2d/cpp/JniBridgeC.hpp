@@ -1,17 +1,11 @@
 #pragma once
 
-/**
- * @file JniBridgeC.hpp
+/*
+ * JniBridgeC.hpp
  *
- * Native <-> Java bridge.
- *
- * The Cubism file loader reads every file through the Java class
- * `JniBridgeJava` (which reads from the APK assets via AssetManager), because
- * the model + shader files are packaged as assets - including the encrypted
- * `.enc` model files (see LAppPal::LoadFileAsBytes for the decryption step).
- *
- * Method IDs are cached once in JNI_OnLoad so the per-call JNI overhead is
- * minimal.
+ * Java side of the JNI bridge. The Cubism file loader reads every model and
+ * shader file through JniBridgeJava because those live in the APK assets.
+ * Method ids are cached once in JNI_OnLoad to keep call overhead low.
  */
 
 #include <CubismFramework.hpp>
@@ -22,27 +16,17 @@ class JniBridgeC
 {
 public:
     /**
-     * Loads an asset file (e.g. "IceGirl/IceGirl.moc3.enc") as raw bytes.
-     *
-     * @param filePath asset path
-     * @param outSize  receives the buffer size
-     * @return heap-allocated buffer (delete[] it) or nullptr when the asset
-     *         does not exist
+     * Loads an asset file as raw bytes. Returns a heap buffer the caller
+     * frees with delete[], or null when the asset does not exist.
      */
     static char* LoadFileAsBytesFromJava(const char* filePath, Csm::csmSizeInt* outSize);
 
-    /**
-     * Lists the entries of an asset directory ("" = assets root).
-     * Directory entries have a trailing '/'.
-     *
-     * @return asset name list
-     */
+    /** Lists an asset directory, empty path means the assets root. */
     static Csm::csmVector<Csm::csmString> GetAssetList(const Csm::csmString& path);
 
     /**
-     * Detaches the calling thread from the JVM when it was attached on demand
-     * (worker threads doing asset IO must call this before exiting - Java
-     * threads and the GL thread are never affected).
+     * Detaches the calling thread from the JVM if we attached it earlier.
+     * Worker threads doing asset IO call this before exiting.
      */
     static void DetachThreadEnv();
 };

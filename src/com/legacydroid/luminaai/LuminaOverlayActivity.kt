@@ -12,12 +12,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 
-/**
- * Transparent fullscreen host for the Lumina overlay. Started explicitly
- * (Settings preview now, PhoneWindowManager in M2): the modern broadcast
- * queue refuses to cold-start targetSdk-O+ manifest receivers in the
- * background, so a receiver-driven service can never appear from a cold app.
- */
+// Transparent fullscreen host for the overlay. Started explicitly because a
+// manifest receiver cannot be cold started in the background on modern
+// Android, so a receiver driven service would never show up.
 class LuminaOverlayActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

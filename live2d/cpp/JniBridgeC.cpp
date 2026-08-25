@@ -1,9 +1,7 @@
-/**
- * JNI bridge between the native engine and the Kotlin class
- * `com.legacydroid.luminaai.live2d.Live2DBridge`.
- *
- * Caches the Java class + method IDs in JNI_OnLoad, and forwards lifecycle /
- * rendering / touch events from Kotlin to the native Live2DEngine.
+/*
+ * JNI bridge between the native engine and Live2DBridge on the Kotlin side.
+ * Caches method ids in JNI_OnLoad and forwards lifecycle, rendering and
+ * touch events over to Live2DEngine.
  */
 
 #include "JniBridgeC.hpp"
@@ -15,18 +13,15 @@
 
 using namespace Csm;
 
-static JavaVM* g_JVM; // JavaVM is valid for all threads - cache it globally
+static JavaVM* g_JVM; // valid for the whole process, cache it
 static jclass g_JniBridgeJavaClass;
 static jmethodID g_GetAssetListMethodId;
 static jmethodID g_LoadFileMethodId;
 
-// True when the *current* thread was attached by us (i.e. a worker thread).
+// set when we attached the current thread ourselves
 static thread_local bool g_attachedByUs = false;
 
-/**
- * Returns the JNIEnv of the calling thread, attaching it to the JVM on demand
- * (worker threads, e.g. the texture decoders, are not attached by the VM).
- */
+// JNIEnv of the calling thread, attaches it to the JVM if needed
 static JNIEnv* GetEnv()
 {
     JNIEnv* env = NULL;
@@ -42,7 +37,7 @@ static JNIEnv* GetEnv()
     return NULL;
 }
 
-// Called by the VM when the .so is loaded.
+// called by the VM when the .so loads
 jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
 {
     g_JVM = vm;
@@ -53,7 +48,7 @@ jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
         return JNI_ERR;
     }
 
-    // Cache the Java bridge class and its static methods.
+    // cache the bridge class and its static methods
     jclass clazz = env->FindClass("com/legacydroid/luminaai/live2d/Live2DBridge");
     if (clazz == nullptr)
     {
@@ -136,7 +131,7 @@ char* JniBridgeC::LoadFileAsBytesFromJava(const char* filePath, Csm::csmSizeInt*
                                     env->NewStringUTF(filePath)));
     if (obj == nullptr)
     {
-        return nullptr; // asset not found (Kotlin returns null)
+        return nullptr; // Kotlin returns null when the asset is missing
     }
 
     *outSize = static_cast<Csm::csmSizeInt>(env->GetArrayLength(obj));
@@ -146,9 +141,7 @@ char* JniBridgeC::LoadFileAsBytesFromJava(const char* filePath, Csm::csmSizeInt*
     return buffer;
 }
 
-// ----------------------------------------------------------------------------
-// Native methods declared by the Kotlin object `JniBridgeJava`.
-// ----------------------------------------------------------------------------
+// native methods called from Live2DBridge
 
 extern "C"
 {
@@ -191,7 +184,7 @@ extern "C"
     JNIEXPORT void JNICALL
     Java_com_legacydroid_luminaai_live2d_Live2DBridge_nativeOnStop(JNIEnv* env, jclass type)
     {
-        // GL surface goes away: release all GL resources + the model.
+        // surface gone, drop the engine with its GL resources
         Live2DEngine::ReleaseInstance();
     }
 
@@ -206,10 +199,9 @@ extern "C"
     JNIEXPORT jint JNICALL
     Java_com_legacydroid_luminaai_live2d_Live2DBridge_nativeGetExpressionCount(JNIEnv* env, jclass type)
     {
-        // PeekInstance (not GetInstance): this getter is polled from the UI
-        // thread while the GL thread loads the model - it must never create
-        // the engine itself, or the engine would be initialized on the UI
-        // thread with no GL surface and the model would never load.
+        // PeekInstance, not GetInstance. This is polled from the UI thread
+        // while the GL thread is still loading. Creating the engine here
+        // would init it without a surface and the model would never load.
         Live2DEngine* engine = Live2DEngine::PeekInstance();
         if (engine == nullptr || engine->GetModel() == nullptr)
         {

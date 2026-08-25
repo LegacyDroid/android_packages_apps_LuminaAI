@@ -28,11 +28,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Power-button shockwave ripples and glow bloom, originating at the power
- * button position: right edge at 36.7% height. Two ripples (0ms / +280ms),
- * soft glow bloom expanding to ~450dp with a slow drift while active.
- */
+// Ripples and glow that spread from the power button when it fires.
+// Two waves, the second one slightly delayed.
 @Composable
 fun LuminaPowerRippleEffect(
     modifier: Modifier = Modifier,
@@ -89,7 +86,7 @@ fun LuminaPowerRippleEffect(
         val height = size.height
         val origin = Offset(width, height * 0.367f)
 
-        // Glow bloom: radial gradient from the power button
+        // soft glow behind the ripples
         if (isActive || glowBloomProgress.value > 0f) {
             val bloomFactor = glowBloomProgress.value
             val maxBloomRadius = 450.dp.toPx()
@@ -119,7 +116,7 @@ fun LuminaPowerRippleEffect(
             }
         }
 
-        // Ripple wave with keyframed alpha: opaque by 8%, half by 60%, gone at 100%
+        // the wave fades out as it expands
         fun drawSingleRipple(progress: Float, maxRadiusDp: Float, baseAlpha: Float) {
             if (progress in 0.001f..0.999f) {
                 val maxRadius = maxRadiusDp.dp.toPx()
@@ -134,7 +131,7 @@ fun LuminaPowerRippleEffect(
                 val strokeWidth =
                     (2.dp.toPx() * (1f - progress * 0.75f)).coerceAtLeast(0.5.dp.toPx())
 
-                // Glow ring around the ripple wave
+                // soft ring behind the line
                 drawCircle(
                     color = scheme.primary.copy(alpha = alpha * 0.45f),
                     radius = radius,
@@ -142,7 +139,7 @@ fun LuminaPowerRippleEffect(
                     style = Stroke(width = strokeWidth * 4f)
                 )
 
-                // Main crisp ripple line
+                // the visible line itself
                 drawCircle(
                     color = scheme.primary.copy(alpha = alpha * 0.95f),
                     radius = radius,
@@ -150,7 +147,7 @@ fun LuminaPowerRippleEffect(
                     style = Stroke(width = strokeWidth)
                 )
 
-                // Inner glow
+                // faint fill inside the ring
                 if (radius > 10f) {
                     drawCircle(
                         color = scheme.secondary.copy(alpha = alpha * 0.25f),

@@ -13,10 +13,7 @@ import android.os.PersistableBundle
 
 object ClipboardTools {
 
-    /**
-     * Copies text to the clipboard. When sensitive is true the clip is flagged
-     * with EXTRA_IS_SENSITIVE so system UI hides it from clipboard previews.
-     */
+    /** Copies text, flagged sensitive so system UI hides it from previews. */
     fun copy(context: Context, text: String, sensitive: Boolean = false): Boolean {
         if (text.isBlank()) return false
         return runCatching {

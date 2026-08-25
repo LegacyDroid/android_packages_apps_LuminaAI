@@ -21,14 +21,13 @@ android_app {
     srcs: ["src/**/*.kt"],
     resource_dirs: ["res"],
 
-    // Live2D avatar model + Cubism shaders, staged by live2d/get_vendor.sh.
-    // A committed .keep keeps the dir valid before staging (avatar then
-    // gracefully reports as unavailable at runtime).
+    // Live2D model and shaders, staged by live2d/get_vendor.sh. A committed
+    // .keep keeps the dir valid before staging, the avatar just reports as
+    // unavailable at runtime.
     asset_dirs: ["live2d/assets"],
 
-    // Native Live2D engine. Extracted to priv-app/<pkg>/lib at scan time -
-    // embedded (extractNativeLibs=false) loading is unreliable for
-    // preinstalled system_ext apps on this tree.
+    // Native Live2D engine. Extracted to priv-app lib at scan time because
+    // embedded libs are unreliable for preinstalled system_ext apps here.
     jni_libs: ["libluminalive2d"],
 
     manifest: "AndroidManifest.xml",

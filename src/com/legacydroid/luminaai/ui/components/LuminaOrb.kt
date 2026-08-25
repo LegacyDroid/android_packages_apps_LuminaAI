@@ -28,11 +28,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/**
- * Material-colored orb: rotating primary/secondary/tertiary conic gradient,
- * specular highlight, tertiary fill layer, inset 3D rim, pulsing white core
- * and slow rotation.
- */
+// The assistant orb. Gradients, highlight, rim shadow and a pulsing core.
 @Composable
 fun LuminaOrb(
     modifier: Modifier = Modifier,
@@ -99,7 +95,7 @@ fun LuminaOrb(
                 center = center
             )
 
-            // Rotating conic gradient orb body
+            // rotating orb body
             rotate(degrees = rotationAngle + 200f, pivot = center) {
                 drawCircle(
                     brush = Brush.sweepGradient(
@@ -116,7 +112,7 @@ fun LuminaOrb(
                 )
             }
 
-            // Specular highlight (top-left)
+            // highlight, top left
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
@@ -130,7 +126,7 @@ fun LuminaOrb(
                 center = center
             )
 
-            // Tertiary fill layer (bottom-right)
+            // fill from the other side
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
@@ -144,7 +140,7 @@ fun LuminaOrb(
                 center = center
             )
 
-            // Inset 3D sphere shadow / rim
+            // rim shadow for some depth
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
@@ -158,7 +154,7 @@ fun LuminaOrb(
                 center = center
             )
 
-            // Inner glowing core, pulsing with the orb
+            // pulsing core
             val innerRadius = orbRadius * 0.40f * corePulse
             drawCircle(
                 brush = Brush.radialGradient(

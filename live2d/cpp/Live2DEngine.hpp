@@ -1,21 +1,12 @@
 #pragma once
 
-/**
- * @file Live2DEngine.hpp
+/*
+ * Live2DEngine.hpp
  *
- * The native render engine: owns the Cubism framework instance, the loaded
- * model, the view matrices (device -> logical screen) and the touch state.
- *
- * The Kotlin side (via JniBridgeJava) drives it through the lifecycle:
- *
- *   Initialize()  - called when the GL surface is created
- *   Resize()      - called when the surface size changes
- *   Run()         - called every frame (render)
- *   OnTouches*()  - touch events
- *   SetExpression / GetExpression* - face expression UI
- *
- * All public methods are thread-safe (a mutex guards the model, since
- * expression calls come from the UI thread while Run() runs on the GL thread).
+ * Native render engine. Owns the Cubism framework, the model, the view
+ * matrices and the touch state. Kotlin drives it through Initialize,
+ * Resize, Run and the OnTouches calls. Public methods are safe to call from
+ * any thread, a mutex guards the model.
  */
 
 #include <mutex>
@@ -31,30 +22,28 @@ class Live2DEngine
 {
 public:
     static Live2DEngine* GetInstance();
-    /** Returns the engine without creating one (null when disposed) - the
-     *  Kotlin side uses this to poll model state without instantiating the
-     *  engine on the UI thread. */
+    /** Like GetInstance but never creates the engine, null when disposed. */
     static Live2DEngine* PeekInstance();
     static void ReleaseInstance();
 
-    // --- GL surface lifecycle -------------------------------------------------
-    void Initialize();                       ///< onSurfaceCreated
-    void Resize(Csm::csmInt32 width, Csm::csmInt32 height); ///< onSurfaceChanged
-    void Run();                              ///< onDrawFrame
+    // gl surface lifecycle
+    void Initialize();                       // onSurfaceCreated
+    void Resize(Csm::csmInt32 width, Csm::csmInt32 height); // onSurfaceChanged
+    void Run();                              // onDrawFrame
 
-    // --- Touch ------------------------------------------------------------------
+    // touch
     void OnTouchesBegan(Csm::csmFloat32 x, Csm::csmFloat32 y);
     void OnTouchesMoved(Csm::csmFloat32 x, Csm::csmFloat32 y);
     void OnTouchesEnded(Csm::csmFloat32 x, Csm::csmFloat32 y);
 
-    // --- Face expressions ----------------------------------------------------------
+    // face expressions
     Csm::csmInt32 GetExpressionCount() const;
     const char* GetExpressionName(Csm::csmInt32 index) const;
     void SetExpression(Csm::csmInt32 index);
-    /** Stops all Add-blended expressions (the assistant tool path). */
+    /** Clears all stacked expressions. */
     void ClearExpressions();
 
-    // --- Motion groups (assistant-driven motions) ---------------------------------
+    // motion groups
     Csm::csmInt32 GetMotionGroupCount() const;
     const char* GetMotionGroupName(Csm::csmInt32 index) const;
     void PlayMotionGroup(Csm::csmInt32 index);
@@ -68,26 +57,26 @@ private:
     Live2DEngine(const Live2DEngine&) = delete;
     Live2DEngine& operator=(const Live2DEngine&) = delete;
 
-    // View/touch plumbing (ported from the Cubism sample's LAppView).
+    // view and touch plumbing, ported from the Cubism sample
     void SetupViewMatrices();
     Csm::csmFloat32 TransformViewX(Csm::csmFloat32 deviceX) const;
     Csm::csmFloat32 TransformViewY(Csm::csmFloat32 deviceY) const;
     void OnTap(Csm::csmFloat32 x, Csm::csmFloat32 y);
 
-    LAppAllocator _cubismAllocator;          ///< framework allocator
-    Csm::CubismFramework::Option _cubismOption; ///< framework options (file loader, log)
+    LAppAllocator _cubismAllocator;          // framework allocator
+    Csm::CubismFramework::Option _cubismOption; // framework options
 
-    SampleModel* _model;                     ///< the loaded Live2D model
-    Csm::CubismMatrix44* _deviceToScreen;    ///< device px -> logical screen
-    Csm::CubismViewMatrix* _viewMatrix;      ///< logical screen -> view
+    SampleModel* _model;                     // the loaded model
+    Csm::CubismMatrix44* _deviceToScreen;    // device pixels to logical screen
+    Csm::CubismViewMatrix* _viewMatrix;      // logical screen to view space
 
-    Csm::csmInt32 _width;                    ///< surface width [px]
-    Csm::csmInt32 _height;                   ///< surface height [px]
+    Csm::csmInt32 _width;                    // surface width in px
+    Csm::csmInt32 _height;                   // surface height in px
 
-    // Touch state (device coordinates).
+    // touch state, device coordinates
     bool _touchStarted;
-    Csm::csmFloat32 _startX, _startY;        ///< where the touch began
-    Csm::csmFloat32 _lastX, _lastY;          ///< latest touch position
+    Csm::csmFloat32 _startX, _startY;        // where the touch began
+    Csm::csmFloat32 _lastX, _lastY;          // latest touch position
 
-    mutable std::mutex _mutex;               ///< guards the model from the UI thread
+    mutable std::mutex _mutex;               // guards the model
 };

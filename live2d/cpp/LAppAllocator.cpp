@@ -31,8 +31,8 @@ void* LAppAllocator::AllocateAligned(const Csm::csmSizeType size, const Csm::csm
         alignedAddress += (alignment - shift);
     }
 
-    // Store the base pointer just before the aligned address so
-    // DeallocateAligned can find it again.
+    // keep the base pointer right before the aligned address so
+    // DeallocateAligned can find it again
     preamble = reinterpret_cast<void**>(alignedAddress);
     preamble[-1] = allocation;
 

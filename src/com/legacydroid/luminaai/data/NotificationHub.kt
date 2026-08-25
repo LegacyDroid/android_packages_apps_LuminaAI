@@ -30,8 +30,7 @@ object NotificationHub {
     private const val TAG = "LuminaNotificationHub"
     private const val BUFFER_MAX = 50
 
-    // Unicode-safe word boundaries so "shipping" does not match "pin"
-    // and "barcode" does not match "code".
+    // word boundaries so shipping does not match pin, or barcode match code
     private val OTP_KEYWORDS_REGEX = Regex(
         "(?<![\\p{L}\\p{N}])(?:[o0]?tp|one[- ]?time|verification|verify|verify code|" +
             "passcode|pass code|login[ -]?code|access code|security code|activation code|" +
@@ -70,10 +69,9 @@ object NotificationHub {
             .isSuccess
         if (grantedDirectly) return
 
-        // Fallback: write enabled_notification_listeners directly; the app holds
-        // WRITE_SECURE_SETTINGS. Note NotificationManagerService may not adopt a
-        // raw write whose value is unchanged, so callers re-run this grant later;
-        // once ACCESS_NOTIFICATIONS is effective the primary path binds instantly.
+        // fallback that writes enabled_notification_listeners directly, the
+        // app holds WRITE_SECURE_SETTINGS. The system can ignore a write
+        // whose value did not change, so callers retry this later.
         runCatching {
             val flat = cn.flattenToString()
             val current = Settings.Secure.getString(
@@ -194,10 +192,9 @@ object NotificationHub {
     }
 
     /**
-     * Picks the OTP from notification text. Digits are searched first inside the
-     * sentence fragments that contain an OTP keyword; the candidate closest to
-     * the keyword wins. Falls back to a whole-text scan. Grouped digits such as
-     * "123 456" are joined before matching.
+     * Picks the otp digits out of the notification text. Looks at the
+     * fragments containing a keyword first and takes the digits closest to
+     * one. Split digit groups like 123 456 are joined before matching.
      */
     private fun findOtp(title: String, text: String): String? {
         val hay = "$title $text"

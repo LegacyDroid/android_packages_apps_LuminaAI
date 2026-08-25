@@ -31,10 +31,7 @@ import com.legacydroid.luminaai.ui.components.LuminaChatOverlay
 import com.legacydroid.luminaai.ui.components.LuminaPowerRippleEffect
 import com.legacydroid.luminaai.ui.theme.LuminaTheme
 
-/**
- * Fullscreen overlay root. Transparent so the app behind stays visible; the
- * dim layer, ambient glow, shockwave and chat appear over it.
- */
+// Fullscreen overlay root. Draws over the app behind it without hiding it.
 @Composable
 fun LuminaRoot() {
     LuminaTheme {

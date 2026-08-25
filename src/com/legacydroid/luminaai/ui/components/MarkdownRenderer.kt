@@ -40,7 +40,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// --- Type-safe Block Models ---
+// Block model for the parsed markdown.
 private sealed interface MarkdownBlock {
     object HorizontalRule : MarkdownBlock
     data class Header(val level: Int, val text: String) : MarkdownBlock
@@ -56,7 +56,7 @@ private data class ParsedInline(
     val linkRanges: List<Pair<IntRange, String>>
 )
 
-// --- Inline Regexes ---
+// Inline regexes, tried in order.
 private val INLINE_CODE_REGEX = Regex("""^`([^`]+)`""")
 private val BOLD_ITALIC_REGEX = Regex("""^(?:\*\*\*(.+?)\*\*\*|___(.+?)___)""")
 private val BOLD_REGEX = Regex("""^(?:\*\*(.+?)\*\*|__(.+?)__)""")
@@ -65,7 +65,7 @@ private val STRIKETHROUGH_REGEX = Regex("""^~~(.+?)~~""")
 private val LINK_REGEX = Regex("""^\[([^\]]+)\]\(([^)]+)\)""")
 private val AUTOLINK_REGEX = Regex("""^https?://[^\s\])]+""")
 
-// --- Block Regexes ---
+// Block regexes, checked top to bottom.
 private val HEADER_REGEX = Regex("""^(#{1,6})\s+(.+)$""")
 private val HORIZONTAL_RULE_REGEX = Regex("""^(?:---|\*\*\*|___)+$""")
 private val BLOCKQUOTE_REGEX = Regex("""^>\s?(.*)$""")
@@ -80,7 +80,7 @@ private fun parseInlineMarkdown(
     val annotatedString = buildAnnotatedString {
         var i = 0
         while (i < text.length) {
-            // Escaped characters
+            // escaped character
             if (i < text.length - 1 && text[i] == '\\' && text[i + 1] in "*_`~[]\\") {
                 append(text[i + 1])
                 i += 2
@@ -89,7 +89,7 @@ private fun parseInlineMarkdown(
 
             val remaining = text.substring(i)
 
-            // Bold + Italic
+            // bold italic
             val boldItalicMatch = BOLD_ITALIC_REGEX.find(remaining)
             if (boldItalicMatch != null) {
                 val content = boldItalicMatch.groupValues[1].ifEmpty { boldItalicMatch.groupValues[2] }
@@ -100,7 +100,7 @@ private fun parseInlineMarkdown(
                 continue
             }
 
-            // Bold
+            // bold
             val boldMatch = BOLD_REGEX.find(remaining)
             if (boldMatch != null) {
                 val content = boldMatch.groupValues[1].ifEmpty { boldMatch.groupValues[2] }
@@ -111,7 +111,7 @@ private fun parseInlineMarkdown(
                 continue
             }
 
-            // Italic
+            // italic
             val italicMatch = ITALIC_REGEX.find(remaining)
             if (italicMatch != null) {
                 val content = italicMatch.groupValues[1].ifEmpty { italicMatch.groupValues[2] }
@@ -122,7 +122,7 @@ private fun parseInlineMarkdown(
                 continue
             }
 
-            // Strikethrough
+            // strikethrough
             val strikethroughMatch = STRIKETHROUGH_REGEX.find(remaining)
             if (strikethroughMatch != null) {
                 withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
@@ -132,7 +132,7 @@ private fun parseInlineMarkdown(
                 continue
             }
 
-            // Inline Code
+            // inline code
             val codeMatch = INLINE_CODE_REGEX.find(remaining)
             if (codeMatch != null) {
                 withStyle(
@@ -148,7 +148,7 @@ private fun parseInlineMarkdown(
                 continue
             }
 
-            // Markdown Link [text](url)
+            // markdown link
             val linkMatch = LINK_REGEX.find(remaining)
             if (linkMatch != null) {
                 val displayText = linkMatch.groupValues[1]
@@ -164,7 +164,7 @@ private fun parseInlineMarkdown(
                 continue
             }
 
-            // Autolink https://...
+            // bare url
             val autoLinkMatch = AUTOLINK_REGEX.find(remaining)
             if (autoLinkMatch != null) {
                 val url = autoLinkMatch.value
@@ -194,14 +194,14 @@ private fun parseBlocks(text: String): List<MarkdownBlock> {
     while (i < lines.size) {
         val line = lines[i]
 
-        // 1. Horizontal Rule
+        // horizontal rule
         if (HORIZONTAL_RULE_REGEX.matches(line.trim())) {
             blocks.add(MarkdownBlock.HorizontalRule)
             i++
             continue
         }
 
-        // 2. Headings
+        // heading
         val headerMatch = HEADER_REGEX.matchEntire(line.trim())
         if (headerMatch != null) {
             val level = headerMatch.groupValues[1].length
@@ -211,7 +211,7 @@ private fun parseBlocks(text: String): List<MarkdownBlock> {
             continue
         }
 
-        // 3. Fenced Code Block
+        // fenced code block
         if (line.trimStart().startsWith("```")) {
             val lang = line.trimStart().removePrefix("```").trim()
             val codeLines = mutableListOf<String>()
@@ -220,12 +220,12 @@ private fun parseBlocks(text: String): List<MarkdownBlock> {
                 codeLines.add(lines[i])
                 i++
             }
-            if (i < lines.size) i++ // consume closing ```
+            if (i < lines.size) i++ // skip the closing fence
             blocks.add(MarkdownBlock.CodeBlock(lang, codeLines.joinToString("\n")))
             continue
         }
 
-        // 4. Blockquote
+        // blockquote
         val bqMatch = BLOCKQUOTE_REGEX.matchEntire(line.trim())
         if (bqMatch != null) {
             val quoteLines = mutableListOf(bqMatch.groupValues[1])
@@ -241,7 +241,7 @@ private fun parseBlocks(text: String): List<MarkdownBlock> {
             continue
         }
 
-        // 5. Unordered List
+        // unordered list
         val ulMatch = UL_REGEX.matchEntire(line.trim())
         if (ulMatch != null) {
             val items = mutableListOf(ulMatch.groupValues[1])
@@ -257,7 +257,7 @@ private fun parseBlocks(text: String): List<MarkdownBlock> {
             continue
         }
 
-        // 6. Ordered List
+        // ordered list
         val olMatch = OL_REGEX.matchEntire(line.trim())
         if (olMatch != null) {
             val items = mutableListOf(olMatch.groupValues[1])
@@ -273,13 +273,13 @@ private fun parseBlocks(text: String): List<MarkdownBlock> {
             continue
         }
 
-        // 7. Blank lines
+        // blank lines
         if (line.isBlank()) {
             i++
             continue
         }
 
-        // 8. Paragraph text
+        // plain paragraph text
         val textLines = mutableListOf(line)
         i++
         while (i < lines.size && lines[i].isNotBlank()

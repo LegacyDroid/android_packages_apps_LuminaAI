@@ -11,17 +11,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * High-level facade over the native Live2D engine for the assistant tools
- * and the overlay UI. All engine access goes through here so the tools stay
- * simple and the model lifecycle has one owner.
- *
- * Expression/motion names are matched against friendly English aliases; the
- * raw model names are Chinese (the author's language), e.g.:
- *   生气 = angry, 猫耳 = cat ears, 爱心眼 = heart eyes ...
+ * Facade over the native Live2D engine for the tools and the overlay UI.
+ * The model's expression names are Chinese, so friendly English aliases are
+ * mapped onto them here, e.g. angry becomes 生气 and catears becomes 猫耳.
  */
 object Live2DController {
 
-    /** Native lib loaded and the model asset is staged in the APK. */
+    /** Lib loaded and the model staged in the APK. */
     var available by mutableStateOf(false)
         private set
 
@@ -31,10 +27,7 @@ object Live2DController {
 
     private var initialized = false
 
-    /**
-     * Friendly alias -> model expression file name (without .exp3.json).
-     * The Chinese names come from the model author's button mapping.
-     */
+    /** English aliases for the expression names that ship with the model. */
     val EXPRESSION_ALIASES: Map<String, String> = mapOf(
         "surprised" to "惊讶",
         "shocked" to "惊讶",
@@ -74,10 +67,10 @@ object Live2DController {
     )
 
     val MOTION_ALIASES: Map<String, String> = mapOf(
-        "idle" to "DaiJi",     // 待机 standby
+        "idle" to "DaiJi",     // standby
         "standby" to "DaiJi",
-        "wave" to "HuiShou",   // 挥手 wave
-        "wink" to "MeiYan"     // 媚眼 flirty wink
+        "wave" to "HuiShou",   // wave
+        "wink" to "MeiYan"     // flirty wink
     )
 
     fun init(context: Context) {
@@ -86,7 +79,7 @@ object Live2DController {
 
         val appContext = context.applicationContext
         val bridgeReady = runCatching {
-            // Triggers Live2DBridge's static init -> System.loadLibrary.
+            // also triggers System.loadLibrary through the bridge init
             Live2DBridge.initialize(appContext)
             android.util.Log.i(TAG, "bridge initialized ok")
             true
@@ -112,7 +105,7 @@ object Live2DController {
 
     private const val TAG = "LuminaLive2D"
 
-    /** Called by the render view once the GL thread finished loading. */
+    /** Called by the render view once loading finished. */
     internal fun markLoaded() {
         loaded = true
     }

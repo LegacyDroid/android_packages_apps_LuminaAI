@@ -19,16 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * Renders the Live2D avatar into a TextureView.
- *
- * A TextureView (not GLSurfaceView) is required because it participates in
- * the normal view hierarchy: the model sits between the dim layer and the
- * chat overlay, which is impossible with a SurfaceView's window-level layer.
- *
- * The view owns a dedicated EGL render thread that mirrors GLSurfaceView's
- * lifecycle: surface created -> nativeOnSurfaceCreated/Changed, continuous
- * frames -> nativeOnDrawFrame, destroyed -> nativeOnStop. Touch events are
- * forwarded in view-local pixels exactly like the demo's GLSurfaceView.
+ * Renders the Live2D avatar into a TextureView. A TextureView is used over a
+ * SurfaceView because it needs to sit between the dim layer and the chat,
+ * which only works inside the normal view hierarchy. Owns a dedicated EGL
+ * render thread and forwards touch events in view local pixels.
  */
 @Composable
 fun LuminaAvatar(
@@ -44,9 +38,8 @@ fun LuminaAvatar(
         factory = { context ->
             val view = TextureView(context)
             view.isOpaque = false
-            // Forward touches in view-local pixels - the native engine maps
-            // them through deviceToScreen for drag-follow and hit tests.
-            // Gated to empty sessions by the caller (chat keeps priority).
+            // touches go to the engine in view local pixels for drag and
+            // hit tests. The caller disables this during chat sessions.
             view.setOnTouchListener { _, event ->
                 if (!holder.touchEnabled || !Live2DController.loaded) {
                     return@setOnTouchListener false
@@ -67,8 +60,8 @@ fun LuminaAvatar(
                 }
 
                 override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                    // UI thread has no EGL context - only record the size here;
-                    // the render thread applies glViewport + Resize itself.
+                    // no EGL context on this thread, the render thread
+                    // picks the size up itself
                     holder.requestSize(w, h)
                 }
 
@@ -110,8 +103,8 @@ private class AvatarHolder {
         val t = RenderThread(surfaceTexture).also { it.start() }
         t.requestSize(width, height)
         thread = t
-        // Initialize() loads the model synchronously on the render thread; poll
-        // briefly so the UI can crossfade as soon as the first frame exists.
+        // the model loads on the render thread, poll until it is there so
+        // the UI can fade it in right away
         Thread {
             repeat(100) {
                 if (runCatching { Live2DBridge.nativeIsModelLoaded() }.getOrDefault(false)) {
@@ -133,9 +126,8 @@ private class AvatarHolder {
 }
 
 /**
- * Minimal EGL14/GLES2 render loop driving the native engine at ~30 fps.
- * 30 fps keeps idle animation smooth while halving GPU/battery cost versus
- * 60 fps - Live2D deformation does not benefit much from higher rates.
+ * Small EGL14 and GLES2 loop driving the engine at 30fps. Higher rates barely
+ * help a Live2D model and cost noticeably more battery.
  */
 private class RenderThread(
     private val surfaceTexture: SurfaceTexture
@@ -144,8 +136,8 @@ private class RenderThread(
     @Volatile
     private var running = true
 
-    // Latest requested surface size; applied on this (GL) thread only, since
-    // glViewport and the engine matrices require the current EGL context.
+    // requested surface size, only applied here on the GL thread where the
+    // EGL context lives
     @Volatile
     private var pendingWidth = 0
 
@@ -205,8 +197,8 @@ private class RenderThread(
         val version = IntArray(2)
         if (!EGL14.eglInitialize(display, version, 0, version, 1)) return false
 
-        // RGBA8888 + depth16: translucent so the dimmed app shows through,
-        // depth for the offscreen mask rendering path.
+        // translucent so the dimmed app shows through, depth for mask
+        // rendering
         val attribs = intArrayOf(
             EGL14.EGL_RED_SIZE, 8,
             EGL14.EGL_GREEN_SIZE, 8,
@@ -237,7 +229,7 @@ private class RenderThread(
 
     private fun shutdownEgl() {
         runCatching {
-            // Release model + GL resources before tearing the context down.
+            // free the model and GL state before killing the context
             Live2DBridge.nativeOnStop()
             EGL14.eglMakeCurrent(
                 display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT

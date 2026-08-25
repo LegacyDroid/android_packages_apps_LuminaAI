@@ -30,7 +30,7 @@ private data class ParticleData(
     val phaseOffset: Float
 )
 
-/** Rising floating light motes with a sine wobble and soft glow. */
+// Small light particles that float upward with a gentle sway.
 @Composable
 fun AmbientParticles(
     modifier: Modifier = Modifier,
@@ -75,7 +75,7 @@ fun AmbientParticles(
                 kotlin.math.sin((progress * 2 * Math.PI + p.phaseOffset * 5).toFloat()) * 24f
             val x = (p.initialX * width + wobbleX).coerceIn(0f, width)
 
-            // Fade in from the bottom, fade out near the top
+            // fade in at the bottom, out near the top
             val alphaProgress = when {
                 progress < 0.15f -> progress / 0.15f
                 progress > 0.85f -> (1f - progress) / 0.15f

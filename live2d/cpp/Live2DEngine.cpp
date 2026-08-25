@@ -1,9 +1,7 @@
-/**
- * Native render engine - see Live2DEngine.hpp for the big picture.
- *
- * The flow mirrors the official Cubism Android sample (LAppDelegate /
- * LAppView / LAppLive2DManager), but with a single model and the model
- * resources delivered encrypted through LAppPal.
+/*
+ * Native render engine, see Live2DEngine.hpp.
+ * Structure follows the official Cubism Android sample, trimmed down to a
+ * single model.
  */
 
 #include "Live2DEngine.hpp"
@@ -25,17 +23,15 @@ using namespace LAppDefine;
 namespace {
 Live2DEngine* s_instance = nullptr;
 
-// Model location inside the APK assets. This engine is purpose-built for the
-// bundled IceGirl model (free Booth download by TianYeLuLu), so the names are
-// hardcoded instead of injected via build flags.
+// model location inside the APK assets. Built for the bundled IceGirl
+// model, so the names are just hardcoded here.
 const csmChar* kModelDirectory = "";
 const csmChar* kModelJsonName = "IceGirl.model3.json";
 
-/** Uniform zoom applied after the fit - makes IceGirl 25% larger than the
- *  plain fit-to-screen (user preference for this model). */
+// extra zoom on top of the fit, this model looks better a bit larger
 const csmFloat32 kAvatarZoom = 1.25f;
 
-/** Distance in device px below which a touch counts as a tap. */
+// touch moves less than this many pixels and it counts as a tap
 const csmFloat32 kTapThreshold = 20.0f;
 } // namespace
 
@@ -76,8 +72,7 @@ Live2DEngine::Live2DEngine()
     , _lastX(0.0f)
     , _lastY(0.0f)
 {
-    // Set up the Cubism framework: logging + file loading through LAppPal
-    // (which transparently decrypts the AES-128-CTR encrypted model assets).
+    // logging and file loading both go through LAppPal
     _cubismOption.LogFunction = LAppPal::PrintMessageLn;
     _cubismOption.LoggingLevel = LAppDefine::CubismLoggingLevel;
     _cubismOption.LoadFileFunction = LAppPal::LoadFileAsBytes;
@@ -103,8 +98,7 @@ void Live2DEngine::Initialize()
 {
     std::lock_guard<std::mutex> lock(_mutex);
 
-    // Texture sampling + blending (model textures are premultiplied by the
-    // renderer; the standard sample blend setup is used here).
+    // standard sampling and premultiplied blending
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glEnable(GL_BLEND);
@@ -117,13 +111,12 @@ void Live2DEngine::Initialize()
         CubismFramework::Initialize();
     }
 
-    // The GL context is fresh: invalidate shader programs from the previous
-    // context and reload them on the next draw.
+    // fresh context, the old shader programs are gone so drop them
     Live2D::Cubism::Framework::Rendering::CubismShader_OpenGLES2::GetInstance()
         ->ReleaseInvalidShaderProgram();
     Live2D::Cubism::Framework::Rendering::CubismShader_OpenGLES2::DeleteInstance();
 
-    // (Re)load the model.
+    // (re)load the model
     delete _model;
     _model = new SampleModel(kModelDirectory);
     const double loadStart = LAppPal::GetSystemTime();
@@ -151,7 +144,7 @@ void Live2DEngine::SetupViewMatrices()
         return;
     }
 
-    // Map the device screen onto the logical screen (height is the reference).
+    // map the device screen onto the logical screen, height is the reference
     const csmFloat32 ratio = static_cast<csmFloat32>(_width) / static_cast<csmFloat32>(_height);
     const csmFloat32 left = -ratio;
     const csmFloat32 right = ratio;
@@ -182,7 +175,7 @@ void Live2DEngine::SetupViewMatrices()
 
 csmFloat32 Live2DEngine::TransformViewX(csmFloat32 deviceX) const
 {
-    // device px -> logical screen -> view space
+    // device px to logical screen, then to view space
     const csmFloat32 screenX = _deviceToScreen->TransformX(deviceX);
     return _viewMatrix->InvertTransformX(screenX);
 }
@@ -199,8 +192,8 @@ void Live2DEngine::Run()
 
     LAppPal::UpdateTime();
 
-    // Fully transparent clear: the TextureView composites this surface over
-    // the dimmed app, so empty pixels must have alpha 0.
+    // clear to fully transparent, the TextureView composites this surface
+    // over the dimmed app so empty pixels need alpha 0
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearDepthf(1.0f);
@@ -210,13 +203,9 @@ void Live2DEngine::Run()
         return;
     }
 
-    // Fully self-calibrating per-frame transform, derived from the drawable
-    // bounds measured at load time (SampleModel::MeasureBounds) - no assumed
-    // coordinate convention:
-    //
-    //   view = z*(v - center)        with z chosen so both half-extents
-    //                                fit inside the logical screen,
-    //                                multiplied by kAvatarZoom.
+    // fit the model from its measured vertex bounds instead of assuming a
+    // coordinate convention. Scale so both half extents land inside the
+    // logical screen, then apply the extra zoom.
     const csmFloat32 cx = _model->GetBoundsCenterX();
     const csmFloat32 cy = _model->GetBoundsCenterY();
     const csmFloat32 halfWidth = _model->GetBoundsHalfWidth();
@@ -229,8 +218,7 @@ void Live2DEngine::Run()
     csmFloat32 z = fitX < fitY ? fitX : fitY;
     z *= kAvatarZoom;
 
-    // Map isotropic logical screen coordinates ([-aspectRatio, aspectRatio] x [-1.0, 1.0])
-    // onto OpenGL Normalized Device Coordinates (NDC: [-1.0, 1.0] x [-1.0, 1.0]).
+    // logical screen coords to GL normalized device coords
     CubismMatrix44 projection;
     projection.Scale(1.0f / aspectRatio, 1.0f);
 
@@ -265,8 +253,7 @@ void Live2DEngine::OnTouchesMoved(csmFloat32 x, csmFloat32 y)
         return;
     }
 
-    // Convert the previous touch position into view space and feed the drag
-    // manager (drives ParamAngleX/Y/Z so the head follows the finger).
+    // feed the drag manager so the head follows the finger
     const csmFloat32 viewX = TransformViewX(_lastX);
     const csmFloat32 viewY = TransformViewY(_lastY);
     _lastX = x;
@@ -287,15 +274,13 @@ void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
         return;
     }
 
-    // Stop dragging.
     _model->SetDragging(0.0f, 0.0f);
 
-    // A short touch with little movement counts as a tap.
+    // short touch with barely any movement, treat it as a tap
     const csmFloat32 dx = _lastX - _startX;
     const csmFloat32 dy = _lastY - _startY;
     if (sqrtf(dx * dx + dy * dy) < kTapThreshold)
     {
-        // Convert to view coordinates and run the hit test.
         const csmFloat32 viewX = TransformViewX(_lastX);
         const csmFloat32 viewY = TransformViewY(_lastY);
         OnTap(viewX, viewY);
@@ -304,8 +289,7 @@ void Live2DEngine::OnTouchesEnded(csmFloat32 x, csmFloat32 y)
 
 void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
 {
-    // HitTest calls CubismUserModel::IsHit(), which uses _modelMatrix's inverse
-    // transform to map view coordinates back to model space.
+    // IsHit maps view coords back to model space for us
     if (_model->HitTest(HitAreaNameHead, x, y))
     {
         LAppPal::PrintLogLn("[Engine] hit: %s -> random expression", HitAreaNameHead);
@@ -320,7 +304,7 @@ void Live2DEngine::OnTap(csmFloat32 x, csmFloat32 y)
         }
         else
         {
-            // Models without a "TapBody" group (IceGirl): play any motion.
+            // IceGirl has no TapBody group, fall back to any motion
             _model->StartRandomMotionInAnyGroup();
         }
     }

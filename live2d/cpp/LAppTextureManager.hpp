@@ -1,11 +1,10 @@
 #pragma once
 
-/**
- * @file LAppTextureManager.hpp
+/*
+ * LAppTextureManager.hpp
  *
- * Loads PNG model textures and uploads them to OpenGL. Ported from the
- * official Cubism Android sample; uses stb_image (vendored in the SDK's
- * Samples/OpenGL/thirdParty) for PNG decoding.
+ * Loads PNG model textures and uploads them to OpenGL, ported from the
+ * Cubism sample. Decoding uses stb_image.
  */
 
 #include <string>
@@ -20,19 +19,19 @@ class LAppTextureManager
 public:
     struct TextureInfo
     {
-        GLuint id;          ///< OpenGL texture name
-        int width;          ///< texture width in px
-        int height;         ///< texture height in px
-        std::string fileName; ///< asset path it was loaded from
+        GLuint id;            // GL texture name
+        int width;            // width in px
+        int height;           // height in px
+        std::string fileName; // asset path it came from
     };
 
-    /** A CPU-side decoded image, ready to be uploaded to the GPU. */
+    /** Decoded image sitting in CPU memory, waiting for the GPU upload. */
     struct DecodedImage
     {
-        unsigned char* pixels = nullptr; ///< RGBA data (free with stbi_image_free)
-        int width = 0;                   ///< image width in px
-        int height = 0;                  ///< image height in px
-        std::string fileName;            ///< asset path it was decoded from
+        unsigned char* pixels = nullptr; // RGBA data, free with stbi_image_free
+        int width = 0;
+        int height = 0;
+        std::string fileName;            // asset path it came from
     };
 
     LAppTextureManager() = default;
@@ -42,28 +41,23 @@ public:
     LAppTextureManager& operator=(const LAppTextureManager&) = delete;
 
     /**
-     * Decodes a PNG (read + decrypted through LAppPal, so encrypted textures
-     * work transparently) and downscales oversized images. CPU-only, safe to
-     * call from worker threads (the JNI thread is attached on demand).
-     *
-     * @return decoded image (pixels == nullptr on failure)
+     * Decodes a PNG and downscales it if it is huge. CPU only, safe from
+     * worker threads. pixels is null on failure.
      */
     DecodedImage DecodePngFile(const std::string& fileName);
 
     /**
-     * Uploads a decoded image to the GPU. Must run on the GL thread.
-     * Frees the image's pixel buffer when the upload is done.
-     *
-     * @return texture info (owned by this manager) or nullptr on failure
+     * Uploads a decoded image, GL thread only. Frees the pixel buffer
+     * afterwards. Returns null on failure.
      */
     TextureInfo* CreateTextureFromDecoded(DecodedImage& image);
 
-    /** Deletes the cached bookkeeping (call when the GL context is lost). */
+    /** Drops the cache bookkeeping, call when the context is lost. */
     void ReleaseTexturesInfo();
 
-    /** Frees the GL textures of all cached entries (GL context teardown). */
+    /** Deletes the GL textures of everything cached. */
     void ReleaseTextures();
 
 private:
-    Csm::csmVector<TextureInfo*> _texturesInfo; ///< cache of loaded textures
+    Csm::csmVector<TextureInfo*> _texturesInfo; // loaded textures
 };
